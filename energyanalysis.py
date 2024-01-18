@@ -387,19 +387,22 @@ class EnergyAnalysis:
         #return round((number / (1000 * 1000)), 10)
         
     def __predict_heating_demand(self, demand, temperature):
-        #data = pd.DataFrame({'Demand': demand, 'Temperature': temperature})
-        #filtered_data = data[data['Temperature'] < 10]
-        #model = LinearRegression()
-        #model.fit(filtered_data[['Temperature']], filtered_data['Demand'])
-        #predicted_demand = model.predict(data[['Temperature']])
-        #data['Predicted_Demand'] = predicted_demand
-        #data['Heating_Demand'] = data['Demand'] - data['Predicted_Demand']
-        #data['Heating_Demand'] = np.where(data['Heating_Demand'] < 0, 0, data['Heating_Demand'])
-        #heating_related_demand = data['Heating_Demand']
-        electric_related_demand = self.__dekningsgrad_calculation(dekningsgrad = 100, timeserie = demand)
-        if np.sum(demand - electric_related_demand) < 100:
-            electric_related_demand = demand * 0.5
-        heating_related_demand = demand - electric_related_demand
+        # Her kommer Åsmunds mesterverk:
+        df = pd.DataFrame({'Energi':demand, 'Temp':temperature})
+        df_without_heat = df.loc[(df['Temp'] >= 17.0)]
+        average_non_heat = np.average(df_without_heat['Energi'])
+        
+        electric_related_demand = np.zeros(len(df))
+        heating_related_demand = np.zeros(len(df))
+        
+        for i in range(0,len(df)):
+            if df['Energi'].iloc[i] >= average_non_heat:
+                electric_related_demand[i] = average_non_heat
+                heating_related_demand[i] = df['Energi'].iloc[i] - average_non_heat
+            else:
+                electric_related_demand[i] = df['Energi'].iloc[i]
+                heating_related_demand[i] = 0
+        
         return heating_related_demand, electric_related_demand
 
     def demand_calculation_simplified(self, row):
