@@ -8,6 +8,7 @@ import swifter
 import streamlit as st
 from sklearn.linear_model import LinearRegression
 import warnings
+import streamlit as st
 
 class EnergyAnalysis:
     PROFET_BUILDINGSTANDARD = "profet_bygningsstandard"
@@ -58,7 +59,7 @@ class EnergyAnalysis:
     HAS_ADDRESS = 'har_adresse'
     HAS_EXISTING_DATA = 'har_eksisterende_data'
     
-    SOLARPANEL_DATA = pd.read_csv('src/solenergi_antakelser.csv', sep = ";")
+    SOLARPANEL_DATA = pd.read_csv('src/solenergi_antakelser_oslo.csv', sep = ";")
     
     BUILDING_TYPES = {
             "Hus": "Hou",
@@ -239,7 +240,7 @@ class EnergyAnalysis:
         df = self.__populate_profet_columns(df)
         df = self.__drop_null_rows(df)
         df = self.__if_not_profet_categories(df)
-        df = self.__cleanup_columns(df)
+        #df = self.__cleanup_columns(df)
         df = self.__area_sort(df)            
         return df
     
@@ -387,19 +388,20 @@ class EnergyAnalysis:
         #return round((number / (1000 * 1000)), 10)
         
     def __predict_heating_demand(self, demand, temperature):
-        #data = pd.DataFrame({'Demand': demand, 'Temperature': temperature})
-        #filtered_data = data[data['Temperature'] < 10]
-        #model = LinearRegression()
-        #model.fit(filtered_data[['Temperature']], filtered_data['Demand'])
-        #predicted_demand = model.predict(data[['Temperature']])
-        #data['Predicted_Demand'] = predicted_demand
-        #data['Heating_Demand'] = data['Demand'] - data['Predicted_Demand']
-        #data['Heating_Demand'] = np.where(data['Heating_Demand'] < 0, 0, data['Heating_Demand'])
-        #heating_related_demand = data['Heating_Demand']
-        electric_related_demand = self.__dekningsgrad_calculation(dekningsgrad = 100, timeserie = demand)
-        if np.sum(demand - electric_related_demand) < 100:
-            electric_related_demand = demand * 0.5
-        heating_related_demand = demand - electric_related_demand
+        df = pd.DataFrame({'Energi':demand, 'Temp':temperature})
+        df_without_heat = df.loc[(df['Temp'] >= 17.0)]
+        average_non_heat = np.average(df_without_heat['Energi'])
+
+        electric_related_demand = np.zeros(len(df))
+        heating_related_demand = np.zeros(len(df))
+
+        for i in range(0,len(df)):
+            if df['Energi'].iloc[i] >= average_non_heat:
+                electric_related_demand[i] = average_non_heat
+                heating_related_demand[i] = df['Energi'].iloc[i] - average_non_heat
+            else:
+                electric_related_demand[i] = df['Energi'].iloc[i]
+                heating_related_demand[i] = 0
         return heating_related_demand, electric_related_demand
 
     def demand_calculation_simplified(self, row):
@@ -444,8 +446,56 @@ class EnergyAnalysis:
             electric_demand_for_calculation = electric_demand_for_calculation - (electric_demand_for_calculation/100)*row[self.REDUCE_ELECTRIC_DEMAND]
         except Exception as e:
             thermal_demand_for_calculation, electric_demand_for_calculation, spaceheating_demand, dhw_demand, electric_demand = [0], [0], [0], [0], [0]
-        
+
         return thermal_demand_for_calculation, electric_demand_for_calculation, spaceheating_demand, dhw_demand, electric_demand
+
+#    def demand_calculation_simplified(self, row):
+#        try:
+#            if row[self.HAS_EXISTING_DATA] == True:
+#                #--
+#                existing_data_df = self.address_dict[row[self.HAS_ADDRESS]]
+#                heat_production = existing_data_df["Varmeproduksjon"].to_numpy()
+#                power_production = existing_data_df["Strømproduksjon"].to_numpy()
+#                # ml
+#                grid_array = existing_data_df["Levert energi til bygg (strømmåler)"].to_numpy()
+#                if int(np.sum(grid_array)) != 0:
+#                    #st.write(row["har_adresse"])
+#                    heating_related_demand, electric_related_demand = self.__predict_heating_demand(demand = grid_array, temperature = self.temperature_array)
+#                    #electric_related_demand = grid_array
+#                    #heating_related_demand = np.zeros(8760)                    
+#                    #--
+#                    thermal_demand_for_calculation = heating_related_demand #+ heat_production
+#                    electric_demand_for_calculation = electric_related_demand
+#                    electric_demand = electric_related_demand + power_production
+#                    spaceheating_demand = heating_related_demand - heat_production # antar at 80% varmeproduksjon er relatert til romoppvarming
+#                    dhw_demand = heat_production # antar at 100% av varmeproduksjon er relatert til tappevann
+#                else:
+#                    spaceheating_series = self.PROFET_DATA[f"{row[self.PROFET_BUILDINGTYPE]}_{row[self.PROFET_BUILDINGSTANDARD]}_SPACEHEATING"]
+#                    spaceheating_demand = row[self.BUILDING_AREA] * np.array(spaceheating_series)
+#                    dhw_demand_series = self.PROFET_DATA[f"{row[self.PROFET_BUILDINGTYPE]}_{row[self.PROFET_BUILDINGSTANDARD]}_DHW"]
+#                    dhw_demand = row[self.BUILDING_AREA] * np.array(dhw_demand_series)
+#                    electric_demand_series = self.PROFET_DATA[f"{row[self.PROFET_BUILDINGTYPE]}_{row[self.PROFET_BUILDINGSTANDARD]}_ELECTRIC"]
+#                    electric_demand = row[self.BUILDING_AREA] * np.array(electric_demand_series)
+#                    #--
+#                    thermal_demand_for_calculation = dhw_demand + spaceheating_demand - heat_production # trekke fra varmeproduksjon
+#                    electric_demand_for_calculation = electric_demand - power_production # trekke fra strømproduksjon
+#            else:
+#                spaceheating_series = self.PROFET_DATA[f"{row[self.PROFET_BUILDINGTYPE]}_{row[self.PROFET_BUILDINGSTANDARD]}_SPACEHEATING"]
+#                spaceheating_demand = row[self.BUILDING_AREA] * np.array(spaceheating_series)
+#                dhw_demand_series = self.PROFET_DATA[f"{row[self.PROFET_BUILDINGTYPE]}_{row[self.PROFET_BUILDINGSTANDARD]}_DHW"]
+#                dhw_demand = row[self.BUILDING_AREA] * np.array(dhw_demand_series)
+#                electric_demand_series = self.PROFET_DATA[f"{row[self.PROFET_BUILDINGTYPE]}_{row[self.PROFET_BUILDINGSTANDARD]}_ELECTRIC"]
+#                electric_demand = row[self.BUILDING_AREA] * np.array(electric_demand_series)
+#                #--
+#                thermal_demand_for_calculation = dhw_demand + spaceheating_demand
+#                electric_demand_for_calculation = electric_demand
+#            #--
+#            thermal_demand_for_calculation = thermal_demand_for_calculation - (thermal_demand_for_calculation/100)*row[self.REDUCE_THERMAL_DEMAND]
+#            electric_demand_for_calculation = electric_demand_for_calculation - (electric_demand_for_calculation/100)*row[self.REDUCE_ELECTRIC_DEMAND]
+#        except Exception as e:
+#            thermal_demand_for_calculation, electric_demand_for_calculation, spaceheating_demand, dhw_demand, electric_demand = [0], [0], [0], [0], [0]
+#        
+#        return thermal_demand_for_calculation, electric_demand_for_calculation, spaceheating_demand, dhw_demand, electric_demand
     
     def __dekningsgrad_calculation(self, dekningsgrad, timeserie):
         if dekningsgrad == 100:
@@ -681,7 +731,7 @@ class EnergyAnalysis:
             df["scenario"] = scenario_name
             #df.drop([self.THERMAL_DEMAND, self.ELECTRIC_DEMAND, self.COMPRESSOR, self.FROM_SOURCE, self.PEAK, self.DISTRICT_HEATING_PRODUCED, self.SOLAR_PANELS_PRODUCED, f'_nettutveksling_energi_liste'], axis=1, inplace=True)
             df.to_csv(f"output/{scenario_name}_unfiltered.csv")
-            #df.drop([self.THERMAL_DEMAND, self.ELECTRIC_DEMAND, self.COMPRESSOR, self.FROM_SOURCE, self.PEAK, self.DISTRICT_HEATING_PRODUCED, self.SOLAR_PANELS_PRODUCED, f'_nettutveksling_energi_liste'], axis=1, inplace=True)
+            df.drop([self.COMPRESSOR, self.FROM_SOURCE, self.PEAK, self.DISTRICT_HEATING_PRODUCED, self.SOLAR_PANELS_PRODUCED, f'_nettutveksling_energi_liste'], axis=1, inplace=True)
             df[self.SCENARIO_NAME] = scenario_name
             #df.to_csv(f"output/{scenario_name}_filtered.csv")
             return df
@@ -710,8 +760,7 @@ class EnergyAnalysis:
         df = __clean_dataframe_and_export_to_csv(df, scenario_name)
         return df
     
-    def add_random_values(self, df, energy_id, building_type, percentage, column):
-        fill_value = True
+    def add_random_values(self, df, energy_id, building_type, percentage, column, fill_value = True):
         if (column == self.GSHP) or (column == self.ASHP) or (column == self.DISTRICT_HEATING):
             unselected_df = df[~((df[self.ENERGY_AREA_ID] == energy_id) & (df[self.PROFET_BUILDINGTYPE] == building_type) & (df[self.HEATING_EXISTS] != fill_value))]
             selected_df = df[(df[self.ENERGY_AREA_ID] == energy_id) & (df[self.PROFET_BUILDINGTYPE] == building_type) & (df[self.HEATING_EXISTS] != fill_value)]
@@ -769,7 +818,10 @@ class EnergyAnalysis:
                     tiltak = PERCENTAGE_CODE_MAP[individual_percentage_code[0]]
                     tiltak_percentage = self.__string_percentage(individual_percentage_code)
                     #st.write(tiltak, tiltak_percentage)
-                    df = self.add_random_values(df = df, energy_id = energy_id, building_type = building_type, percentage = tiltak_percentage, column = tiltak)
+                    if tiltak == "T" or tiltak == "E":
+                        df = self.add_random_values(df = df, energy_id = energy_id, building_type = building_type, percentage = tiltak_percentage, column = tiltak, fill_value = tiltak_percentage)
+                    else:
+                        df = self.add_random_values(df = df, energy_id = energy_id, building_type = building_type, percentage = tiltak_percentage, column = tiltak, fill_value = True)
                     #df = self.fill_reduction_values(df = df, energy_id = energy_id, building_type = building_type, percentage = tiltak_percentage, column = tiltak)
         #--
         df[self.HAS_EXISTING_DATA] = False

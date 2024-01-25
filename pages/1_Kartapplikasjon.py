@@ -13,15 +13,24 @@ from shapely.geometry import Point, Polygon
 from folium.plugins import Fullscreen
 import time
 import base64
+import geojson
+
 
 def streamlit_settings(title, icon):
     st.set_page_config(page_title=title, page_icon=icon, layout="wide")
-    with open("src/styles/main.css") as f:
-        st.markdown("<style>{}</style>".format(f.read()), unsafe_allow_html=True)
+    st.markdown("""<style>[data-testid="collapsedControl"] svg {height: 3rem;width: 3rem;}</style>""", unsafe_allow_html=True)   
     st.markdown(
-        """<style>[data-testid="collapsedControl"] svg {height: 3rem;width: 3rem;}</style>""",
+        """
+    <style>
+    [data-testid="stMetricValue"] {
+        font-size: 25px;
+    }
+    </style>
+    """,
         unsafe_allow_html=True,
     )
+    with open("src/styles/main.css") as f:
+        st.markdown("<style>{}</style>".format(f.read()), unsafe_allow_html=True)
 
 @st.cache_resource(show_spinner=False)
 def find_scenario_names(folder_path):
@@ -34,7 +43,8 @@ def find_scenario_names(folder_path):
 
 @st.cache_resource(show_spinner=False)
 def read_position(filepath):
-    df_position = pd.read_csv(filepath_or_buffer=f"{filepath}_unfiltered.csv", usecols=["x", "y", "har_adresse", "objectid", "profet_bygningstype", "bruksareal_totalt", "solceller", "grunnvarme", "fjernvarme", "luft_luft_varmepumpe", "oppgraderes", "bygningsomraadeid"])
+    #df_position = pd.read_csv(filepath_or_buffer=f"{filepath}_unfiltered.csv", usecols=["x", "y", "har_adresse", "objectid", "profet_bygningstype", "bruksareal_totalt", "solceller", "grunnvarme", "fjernvarme", "luft_luft_varmepumpe", "oppgraderes", "bygningsomraadeid", "varmeløsning"])
+    df_position = pd.read_csv(filepath_or_buffer=f"{filepath}_unfiltered.csv")
     return df_position
 
 @st.cache_resource(show_spinner=False)
@@ -85,33 +95,57 @@ def create_map(df_position):
             text_color = TEXT_COLOR_MAP[text]
         except Exception:
             text_color = "black"
-
-        icon = folium.plugins.BeautifyIcon(
-            # icon = "home",
-            border_width=1,
-            border_color=text_color,
-            text_color=text_color,
-            # background_color = "#FFFFFF00",
-            icon_shape="circle",
-            number=text,
-            icon_size=(20, 20),
-        )
         tooltip_text = f"""
-            {row["har_adresse"]} (<strong>{row["bruksareal_totalt"]:,} m²</strong>)<br>
-            <em>{row["profet_bygningstype"]}</em>""".replace(
-            ",", " "
-        )
+            <strong>{row["har_adresse"]}</strong><br>
+            {row["bruksareal_totalt"]} m² | {row["antall_etasjer"]} etasjer<br>
+            Siste rehab i år {row["siste_rehab"]} <br>
+            {int(row["he"])} hybelenheter og {int(row["bolig"])} boligenheter<br>
+            {row["varmeløsning"]} | {row["ventilasjonsprinsipp"]}<br>
+            Varmt tappevann fra {row["varmt_tappevann_fra"][0].lower()}{row["varmt_tappevann_fra"][1:]}<br>
+            """.replace(",", " ")
+        if row["scenario"] != "Referansesituasjon":
+            icon = folium.plugins.BeautifyIcon(
+                # icon = "home",
+                border_width=1,
+                border_color=text_color,
+                text_color=text_color,
+                # background_color = "#FFFFFF00",
+                icon_shape="circle",
+                number=text,
+                icon_size=(20, 20),
+            )
+        else:
+            percentage = ((row["bruksareal_totalt"]/11503)*100)/3
+            border_color = "black"
+            if row["varmeløsning"] == "Panelovn":
+                border_color = "red"
+            if row["varmeløsning"] == "Radiator":
+                border_color = "blue"
+            if row["varmeløsning"] == "Gulvvarme/Radiator":
+                border_color = "green"
+            if row["varmeløsning"] == "Elektrisk gulvvarme på bad. Ventilasjonsvarme":
+                border_color = "blue"
+            #text = row["har_adresse"]
+            icon = folium.plugins.BeautifyIcon(
+                #prefix="glyphicon glyphicon-resize-full",
+                border_color=border_color,
+                text_color="white",
+                icon_shape="circle",
+                icon_size=(20 + percentage, 20 + percentage),
+
+            )
         return popup_text, tooltip_text, icon
     
     def add_building_to_marker_cluster(marker_cluster, scenario_name, df):
         for index, row in df.iterrows():
             popup_text, tooltip_text, icon = styling_function(row)
-            folium.Marker(
+            marker = folium.Marker(
                 [row["y"], row["x"]],
                 # popup = popup_text,
                 tooltip=tooltip_text,
                 icon=icon,
-            ).add_to(marker_cluster)
+            )
+            folium_map.add_child(marker)
     
     def add_geojson_to_map(
         file_path,
@@ -137,7 +171,7 @@ def create_map(df_position):
             name=layer_name,
             show=show,
         ).add_to(folium_map)
-
+    
     center_y = df_position["x"].mean()
     center_x = df_position["y"].mean()
     folium_map = folium.Map(
@@ -155,8 +189,68 @@ def create_map(df_position):
     gdf_buildings = gpd.GeoDataFrame(df_position, geometry=geometry, crs='EPSG:4326')
     #gdf_buildings = gdf_buildings.drop(columns=['y', 'x'])
     #geojson_buildings = gdf_buildings.to_json()
-    marker_cluster = add_marker_cluster_to_map()
-    add_building_to_marker_cluster(marker_cluster=marker_cluster, scenario_name=selected_scenario_name, df=df_position)
+    #marker_cluster = add_marker_cluster_to_map()
+    marker_layer = folium.FeatureGroup(name='Bygninger')
+    for index, row in df_position.iterrows():
+        popup_text, tooltip_text, icon = styling_function(row)
+        marker = folium.Marker(
+            [row["y"], row["x"]],
+            # popup = popup_text,
+            tooltip=tooltip_text,
+            icon=icon,
+        )
+        marker_layer.add_child(marker)
+    
+    folium_map.add_child(marker_layer)
+
+    folium.GeoJson(
+        "src/geojson/EKSISTERENDE_BRØNNER.geojson",
+        style_function=lambda feature: {"color": "#0000FF", "fillOpacity": 0.5} if feature["properties"]["Varmesentral"] == "Varmesentral 1" else {"color": "#0096FF", "fillOpacity": 0.5},
+        control=True,
+        show = False,
+        name="Eksisterende brønner",
+        marker=folium.Circle(
+            radius=1, 
+            weight=1)
+            ).add_to(folium_map)
+    folium.GeoJson(
+        "src/geojson/BRØNNER_NIH.geojson",
+        control=True,
+        show = False,
+        name="Brønnpark, Idrettshøyskolen",
+        marker=folium.Circle(
+            radius=1, 
+            fill_opacity=0.5, 
+            color="#0047AB", 
+            weight=1)
+            ).add_to(folium_map)
+    folium.GeoJson(
+        "src/geojson/VASKEROM.geojson",
+        control=True,
+        show = False,
+        name="Vaskerom",
+        marker=folium.Circle(
+            fill_color="red",
+            radius=10, 
+            weight=7)
+            ).add_to(folium_map)
+    folium.GeoJson(
+        "src/geojson/VARMTVANNSTRASE.geojson",
+        control=True,
+        show = False,
+        name="Varmtvannstrase",
+        ).add_to(folium_map)
+    folium.GeoJson(
+        "src/geojson/VARMESENTRALER.geojson",
+        style_function=lambda feature: {"color": "#0000FF", "fillOpacity": 1} if feature["properties"]["Navn"] == "Varmesentral 1" else {"color": "#0096FF", "fillOpacity": 1},
+        control=True,
+        show = False,
+        name="Varmesentraler",
+        marker=folium.Circle(
+            radius=10, 
+            weight=7)
+            ).add_to(folium_map)
+
     add_wms_layer_to_map(
         url = "https://geo.ngu.no/mapserver/LosmasserWMS2?request=GetCapabilities&service=WMS",
         layer = "Losmasse_flate",
@@ -171,46 +265,6 @@ def create_map(df_position):
         opacity = 0.5,
         show = False
         )
-    add_geojson_to_map(
-            file_path="src/geojson/planområde.geojson",
-            fill_color="transparent",
-            color="black",
-            weight=2,
-            opacity=0.5,
-            tooltip="Planområde",
-            layer_name="Planområde",
-            show=True,
-        )
-    add_geojson_to_map(
-        file_path="src/geojson/utvidet_område.geojson",
-        fill_color="transparent",
-        color="black",
-        weight=0.5,
-        opacity=0.5,
-        tooltip="Utvidet område",
-        layer_name="Utvidet område",
-        show=True,
-    )
-    add_geojson_to_map(
-        file_path="src/geojson/eksisterende_bygg.geojson",
-        fill_color="red",
-        color="black",
-        weight=1,
-        opacity=0.5,
-        tooltip="Eksisterende bygg",
-        layer_name="Eksisterende bygg",
-        show=False,
-    )
-    add_geojson_to_map(
-        file_path="src/geojson/nye_bygg.geojson",
-        fill_color="green",
-        color="black",
-        weight=1,
-        opacity=0.5,
-        tooltip="Nye bygg",
-        layer_name="Nye bygg",
-        show=False,
-    )
     drawing = folium.plugins.Draw(
         position="topright",
         draw_options={
@@ -234,7 +288,7 @@ def display_map(folium_map):
     st_map = st_folium(
         folium_map,
         use_container_width=True,
-        height=500,
+        height=400,
         returned_objects=["last_active_drawing"],
         )
     return st_map
@@ -245,30 +299,32 @@ def spatial_join(gdf_buildings):
         polygon_gdf = gpd.GeoDataFrame(index=[0], geometry=[polygon])
         filtered_gdf = gpd.sjoin(gdf_buildings, polygon_gdf, op="within")
     except Exception:
-        st.info('Tegn et polygon for å gjøre et utvalg av bygg', icon="ℹ️")
+        #st.info('Tegn et polygon for å gjøre et utvalg av bygg', icon="ℹ️")
         st.stop()
     return filtered_gdf
 
 def scenario_comparison():
-#    with st.sidebar:
-#        scenario_comparison = st.checkbox("Sammenligne scenarier?", value=True)
-    scenario_comparison = True
+    scenario_comparison = st.checkbox("Sammenligne scenarier?", value=False)
     return scenario_comparison
 
 def building_plan_filter(df_position):
-    with st.sidebar:
-        selected_buildings_option = st.radio(
-            "Velg bygningsmasse", 
-            options = [
-                "Eksisterende bygningsmasse", 
-                "Eksisterende bygningsmasse + byggetrinn 3", 
-                ]
-                )
-        selected_buildings_option_map = {
-            "Eksisterende bygningsmasse" : "EksisterendeUtenBT3",
-            "Eksisterende bygningsmasse + byggetrinn 3" : "EksisterendeOgBT3",
-        }
-        building_area_id = selected_buildings_option_map[selected_buildings_option]
+#    selected_buildings_option = st.radio(
+#        "Velg bygningsmasse", 
+#        options = [
+#            "Eksisterende bygningsmasse", 
+#            "Planforslag (inkl. dagens bygg som skal bevares)", 
+#            "Planforslag (ekskl. helsebygg)", 
+#            "Planforslag og områdene rundt Østmarka"
+#            ]
+#            )
+#    selected_buildings_option_map = {
+#        "Eksisterende bygningsmasse" : "EksisterendeOgBT3",
+#        "Planforslag (inkl. dagens bygg som skal bevares)" : "P1",
+#        "Planforslag (ekskl. helsebygg)" : "P2",
+#        "Planforslag og områdene rundt Østmarka" : "P3"
+#    }
+#    building_area_id = selected_buildings_option_map[selected_buildings_option]
+    building_area_id = "EksisterendeOgBT3"
     df_position = df_position[df_position['bygningsomraadeid'] == building_area_id]
     return df_position
 
@@ -278,10 +334,10 @@ def read_hourly_data(object_ids, filepath):
     return df_hourly_data
 
 def select_scenario():
-    with st.sidebar:
-        option_list = SCENARIO_NAMES.copy()
-        option_list.remove('Referansesituasjon')
-        scenario_name = st.radio(label='Velg scenario', options=option_list)
+    option_list = SCENARIO_NAMES.copy()
+    option_list.remove('Referansesituasjon')
+    option_list.append('Referansesituasjon')
+    scenario_name = st.radio(label='Velg scenario', options=option_list, index=len(option_list) - 1)
     return scenario_name
 
 def get_dict_arrays(df_hourly_data):
@@ -380,9 +436,9 @@ def metric(text, color, energy, effect, energy_reduction = 0, effect_reduction =
     energy = int(round(energy, -3))
     effect = int(round(effect, 1))
     if energy_reduction > 0 or effect_reduction > 0:
-        st.markdown(f"<span style='color:{color}'><small>{text}</small><br>**{energy:,}** kWh/år ({-energy_reduction} %)<br>**{effect:,}** kW ({-effect_reduction} %)".replace(",", " "), unsafe_allow_html=True)
+        st.markdown(f"<span style='color:{color}'><small>{text}</small><br><big>**{energy:,}** kWh/år</big> ({-energy_reduction} %) | <big>**{effect:,}** kW</big> ({-effect_reduction} %)".replace(",", " "), unsafe_allow_html=True)
     else:
-        st.markdown(f"<span style='color:{color}'><small>{text}</small><br>**{energy:,}** kWh/år<br>**{effect:,}** kW".replace(",", " "), unsafe_allow_html=True)
+        st.markdown(f"<span style='color:{color}'><small>{text}</small><br><big>**{energy:,}** kWh/år</big> | <big>**{effect:,}** kW</big>".replace(",", " "), unsafe_allow_html=True)
 
 def download_link(df, filename='dataframe.csv'):
     csv = df.to_csv(index=False)
@@ -433,144 +489,241 @@ def energy_effect_plot():
         yaxis_ticksuffix=" kWh",
         yaxis2_ticksuffix=" kW",
         separators="* .*",
-        height=250
+        height=150
         )
     st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
     st.markdown(download_link(df = df, filename = "data.csv"), unsafe_allow_html=True)
 
 def energy_effect_delivered_plot():
-    #metric(text = "Totalt", color = TOTAL_COLOR, energy = results[selected_scenario_name]["dict_sum"]["total"], effect = results[selected_scenario_name]["dict_max"]["total"])
-    heat_production = False
-    kWh_labels = ['Elektrisk (kWh)', 'Termisk (kWh)']
-    kW_labels = ['Elektrisk (kW)', 'Termisk (kW)', 'Totalt (kW)']
-    COLORS = [ELECTRIC_COLOR, THERMAL_COLOR, TOTAL_COLOR]
-
-    if results[selected_scenario_name]["dict_max"]["produced_heat"] > 0.1:
-        heat_production = True
-        COLORS = [ELECTRIC_COLOR, THERMAL_COLOR, PRODUCED_HEAT_COLOR, TOTAL_COLOR]
-        kWh_labels = ['Elektrisk (kWh)', 'Termisk (kWh)', 'Varmeproduksjon (kWh)']
-        kW_labels = ['Elektrisk (kW)', 'Termisk (kW)', 'Varmeproduksjon (kW)', 'Totalt (kW)']
-
-    df = pd.DataFrame({
-        "Måneder" : MONTHS,
-        "Totalt (kW)" : results[selected_scenario_name]["dict_months_max"]["total"],
-        "Termisk (kW)" : results[selected_scenario_name]["dict_months_max"]["thermal"],
-        "Elektrisk (kW)" : results[selected_scenario_name]["dict_months_max"]["electric"],
-        "Varmeproduksjon (kW)" : results[selected_scenario_name]["dict_months_max"]["produced_heat"],
-        "Strømproduksjon (kW)" : results[selected_scenario_name]["dict_months_max"]["produced_el"],
-        "Scenario (kW)" : results[selected_scenario_name]["dict_months_sum"]["grid"],
-        "Totalt (kWh)" : results[selected_scenario_name]["dict_months_sum"]["total"],
-        "Termisk (kWh)" : results[selected_scenario_name]["dict_months_sum"]["thermal"],
-        "Elektrisk (kWh)" : results[selected_scenario_name]["dict_months_sum"]["electric"],
-        "Varmeproduksjon (kWh)" : results[selected_scenario_name]["dict_months_sum"]["produced_heat"],
-        #"Strømproduksjon (kWh)" : results[selected_scenario_name]["dict_months_sum"]["produced_el"],
-        "Scenario (kWh)" : results[selected_scenario_name]["dict_months_sum"]["grid"],
-    })
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        metric(text = "Varmebehov", color = THERMAL_COLOR, energy = results[selected_scenario_name]["dict_sum"]["thermal"], effect = results[selected_scenario_name]["dict_max"]["thermal"])      
-        with st.expander("Mer informasjon"):
-            #st.markdown(f"""<span style='color:{THERMAL_COLOR}'><small>Totalt varmebehov<br>**{heat_energy:,}** kWh/år | **{heat_effect:,}** kW<br><small>• **{spaceheating_energy:,}** kWh/år | **{spaceheating_effect:,}** kW (oppvarming)</small><br><small>• **{dhw_energy:,}** kWh/år | **{dhw_effect:,}** kW (tappevann)</small>""".replace(",", " "), unsafe_allow_html=True)
-            metric(text = "Totalt varmebehov", color = THERMAL_COLOR, energy = results[selected_scenario_name]["dict_sum"]["thermal_total"], effect = results[selected_scenario_name]["dict_max"]["thermal_total"])
-            metric(text = "• Andel som er oppvarming", color = THERMAL_COLOR, energy = results[selected_scenario_name]["dict_sum"]["spaceheating"], effect = results[selected_scenario_name]["dict_max"]["spaceheating"])
-            metric(text = "• Andel som er tappevann", color = THERMAL_COLOR, energy = results[selected_scenario_name]["dict_sum"]["dhw"], effect = results[selected_scenario_name]["dict_max"]["dhw"])
-            
-            if heat_production == True:
-                metric(text = "• Levert tappevann", color = PRODUCED_HEAT_COLOR, energy = -results[selected_scenario_name]["dict_sum"]["produced_heat"], effect = -results[selected_scenario_name]["dict_max"]["produced_heat"])   
-            st.markdown(download_link(df = df, filename = "data.csv"), unsafe_allow_html=True)
-    with col2:
-        metric(text = "Elspesifikt behov", color = ELECTRIC_COLOR, energy = results[selected_scenario_name]["dict_sum"]["electric"], effect = results[selected_scenario_name]["dict_max"]["electric"])
-        with st.expander("Mer informasjon"):
-            st.markdown(download_link(df = df, filename = "data.csv"), unsafe_allow_html=True)
-    with col3:
-        metric(text = "Dagens behov fra strømnettet (varme + el)", color = TOTAL_COLOR, energy = results[selected_scenario_name]["dict_sum"]["total_delivered"], effect = results[selected_scenario_name]["dict_max"]["total_delivered"])
-        with st.expander("Mer informasjon"):
-            st.markdown(download_link(df = df, filename = "data.csv"), unsafe_allow_html=True)
-
-    
-    y_max_energy = np.max(df["Totalt (kWh)"] * 1.1)
-    y_max_effect = np.max(df["Totalt (kW)"] * 1.1)
+    st.write("**Referansesituasjon**")
+    with st.expander("Hva ligger i dette scenariet?"):
+        st.write("...")
+    HOURS = np.arange(0, 8760)
     fig = go.Figure()
-    
-    for i, series in enumerate(kWh_labels):
-        if series == 'Varmeproduksjon (kWh)':
-            pattern_shape="x"
-        else:
-            pattern_shape=None
-        bar = go.Bar(x=df['Måneder'], y=df[series], name=series, yaxis='y', marker=dict(color=COLORS[i], line=dict(color='black', width=2)), marker_pattern_shape=pattern_shape)
-        fig.add_trace(bar)
-    for i, series in enumerate(kW_labels):
-        fig.add_trace(go.Scatter(x=df['Måneder'], y=df[series], name=series, yaxis='y2', mode='lines+markers', line=dict(width=1, color="black", dash = "dot"), marker=dict(color=COLORS[i], symbol="diamond", line=dict(width=1, color = "black"))))
+#    fig.add_trace(
+#        go.Scatter(
+#            x=HOURS,
+#            y=results[selected_scenario_name]["dict_arrays"]["total_delivered"],
+#            hoverinfo='skip',
+#            stackgroup="one",
+#            visible = 'legendonly',
+#            fill="tonexty",
+#            line=dict(width=0, color=TOTAL_COLOR),
+#            name=f'Fra strømnettet (totalt):<br>{int(round(results[selected_scenario_name]["dict_sum"]["total_delivered"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["total_delivered"],-1)):,} kW'.replace(",", " ")
+#            ))
+    fig.add_trace(
+        go.Scatter(
+            x=HOURS,
+            y=results[selected_scenario_name]["dict_arrays"]["electric"],
+            hoverinfo='skip',
+            stackgroup="one",
+            fill="tonexty",
+            line=dict(width=0, color=ELECTRIC_COLOR),
+            name=f'Elspesifikt (behov fra strømnettet):<br>{int(round(results[selected_scenario_name]["dict_sum"]["electric"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["electric"],-1)):,} kW'.replace(",", " ")
+            ))
+    if results[selected_scenario_name]["dict_sum"]["produced_el"] > 1:
+        fig.add_trace(
+            go.Scatter(
+                x=HOURS,
+                y=results[selected_scenario_name]["dict_arrays"]["produced_el"],
+                hoverinfo='skip',
+                stackgroup="one",
+                fill="tonexty",
+                line=dict(width=0, color=PRODUCED_EL_COLOR),
+                name=f'Strøm fra solceller:<br>{int(round(results[selected_scenario_name]["dict_sum"]["produced_el"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["produced_el"],-1)):,} kW'.replace(",", " ")
+                ))
+    fig.add_trace(
+        go.Scatter(
+            x=HOURS,
+            y=results[selected_scenario_name]["dict_arrays"]["thermal"],
+            hoverinfo='skip',
+            stackgroup="one",
+            fill="tonexty",
+            line=dict(width=0, color=THERMAL_COLOR),
+            name=f'Termisk (behov fra strømnettet):<br>{int(round(results[selected_scenario_name]["dict_sum"]["thermal"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["thermal"],-1)):,} kW'.replace(",", " ")
+            ))
+    if results[selected_scenario_name]["dict_sum"]["produced_heat"] > 1:
+        fig.add_trace(
+            go.Scatter(
+                x=HOURS,
+                y=results[selected_scenario_name]["dict_arrays"]["produced_heat"],
+                hoverinfo='skip',
+                stackgroup="one",
+                fill="tonexty",
+                line=dict(width=0, color=PRODUCED_HEAT_COLOR),
+                name=f'Tappevannsproduksjon:<br>{int(round(results[selected_scenario_name]["dict_sum"]["produced_heat"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["produced_heat"],-1)):,} kW'.replace(",", " ")
+                ))
     fig.update_layout(
-        showlegend=False,
+        legend=dict(
+            x=0,
+            y=1,
+            orientation='h',
+            xanchor='left',
+            yanchor='top',
+            title=None,
+            bgcolor='rgba(255, 255, 255, 0.5)',
+            font=dict(size=13)
+        ),
+        showlegend=True,
         margin=dict(b=0, t=0),
-        yaxis=dict(title=None, side='left', showgrid=True, tickformat=",.0f", range=[0, y_max_energy]),
-        yaxis2=dict(title=None, side='right', overlaying='y', showgrid=True, range=[0, y_max_effect]),
-        xaxis=dict(title=None, showgrid=True, tickformat=",.0f"),
         barmode='relative',
-        yaxis_ticksuffix=" kWh",
-        yaxis2_ticksuffix=" kW",
+        #yaxis_ticksuffix=" kW",
         separators="* .*",
-        height=250
+        height=300,
+        yaxis=dict(
+            title="Effekt (kW)",
+            side='left', 
+            showgrid=True, 
+            tickformat=",.0f", 
+            range=[0, results[selected_scenario_name]["dict_max"]["total"] * 1.5]),
+        xaxis = dict(
+            tickmode = 'array', 
+            tickvals = [0, 24 * (31), 24 * (31 + 28), 24 * (31 + 28 + 31), 24 * (31 + 28 + 31 + 30), 24 * (31 + 28 + 31 + 30 + 31), 24 * (31 + 28 + 31 + 30 + 31 + 30), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30 + 31)], 
+            ticktext = ["1.jan", "", "1.mar", "", "1.mai", "", "1.jul", "", "1.sep", "", "1.nov", "", "1.jan"],
+            title=None,
+            showgrid=True)
         )
     st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
-
+    c1, c2 = st.columns(2)
+    with c1:
+        energy = results[selected_scenario_name]["dict_sum"]["total_delivered"]
+        st.write("**Energi** fra strømnettet")
+        st.metric(label = "Per bygg", value = f'{int(round(energy,-3)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+        st.metric(label = "Per boligenhet", value = f'{int(round(energy/boligenhet,-2)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+        st.metric(label = "Per hybelenhet", value = f'{int(round(energy/hybelenhet,-1)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+        st.metric(label = "Per arealenhet", value = f'{int(round(energy/arealenhet,0)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+    with c2:
+        effect = results[selected_scenario_name]["dict_max"]["total_delivered"]
+        st.write("**Effekt** fra strømnettet")
+        st.metric(label = "Per bygg", value = f'{int(round(effect,-1)):,} kW'.replace(",", " "), label_visibility='visible')
+        st.metric(label = "Per boligenhet", value = f'{int((effect/boligenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+        st.metric(label = "Per hybelenhet", value = f'{int((effect/hybelenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+        st.metric(label = "Per arealenhet", value = f'{int((effect/arealenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+    
+def download_data():
+    with st.expander("Mer informasjon"):
+        data = results[selected_scenario_name]["dict_months_sum"]
+        df = pd.DataFrame(data)
+        df["months"] = MONTHS
+        df = df.set_index('months')
+        st.write("Tabellen under viser månedlige verdier for energi (kWh).")
+        st.dataframe(
+            data=df,
+            column_config={
+                "months" : "Måned",
+                "thermal" : st.column_config.NumberColumn("Romoppvarming + tappevann - varmeproduksjon (kWh)", format="%d"),
+                "thermal_total" : st.column_config.NumberColumn("Romoppvarming + tappevann (kWh)", format="%d"),
+                "spaceheating" : st.column_config.NumberColumn("Romoppvarming (kWh)", format="%d"),
+                "elspecific" : st.column_config.NumberColumn("Elspesifikt (kWh)", format="%d"),
+                "grid" : st.column_config.NumberColumn("Levert fra strømnettet (kWh)", format="%d"),
+                "produced_heat" : st.column_config.NumberColumn("Lokalprodusert varme (kWh)", format="%d"),
+                "produced_el" : st.column_config.NumberColumn("Lokalprodusert strøm (kWh)", format="%d"),
+                "total" : st.column_config.NumberColumn("Totalt (kWh)", format="%d"),
+                "total_delivered" : st.column_config.NumberColumn("Levert totalt (kWh)", format="%d"),
+                "dhw" : st.column_config.NumberColumn("Tappevann (kWh)", format="%d"),
+                "electric" : st.column_config.NumberColumn("Elspesifikt behov - lokalprodusert strøm (kWh)", format="%d")
+            }, 
+            use_container_width=True)
+        #--
+        data = results[selected_scenario_name]["dict_months_max"]
+        df = pd.DataFrame(data)
+        df["months"] = MONTHS
+        df = df.set_index('months')
+        st.write("Tabellen under viser månedlige verdier for effekt (kW).")
+        st.dataframe(
+            data=df,
+            column_config={
+                "months" : "Måned",
+                "thermal" : st.column_config.NumberColumn("Romoppvarming + tappevann - varmeproduksjon (kW)", format="%d"),
+                "thermal_total" : st.column_config.NumberColumn("Romoppvarming + tappevann (kW)", format="%d"),
+                "spaceheating" : st.column_config.NumberColumn("Romoppvarming (kW)", format="%d"),
+                "elspecific" : st.column_config.NumberColumn("Elspesifikt (kW)", format="%d"),
+                "grid" : st.column_config.NumberColumn("Levert fra strømnettet (kW)", format="%d"),
+                "produced_heat" : st.column_config.NumberColumn("Lokalprodusert varme (kW)", format="%d"),
+                "produced_el" : st.column_config.NumberColumn("Lokalprodusert strøm (kW)", format="%d"),
+                "total" : st.column_config.NumberColumn("Totalt (kW)", format="%d"),
+                "total_delivered" : st.column_config.NumberColumn("Levert totalt (kW)", format="%d"),
+                "dhw" : st.column_config.NumberColumn("Tappevann (kW)", format="%d"),
+                "electric" : st.column_config.NumberColumn("Elspesifikt behov - lokalprodusert strøm (kW)", format="%d")
+            }, 
+            use_container_width=True)
+    
 def energy_effect_scenario_plot():
-    df = pd.DataFrame({
-        "Måneder" : MONTHS,
-        "Scenario (kW)" : results[selected_scenario_name]["dict_months_max"]["grid"],
-        "Renewable (kW)" : np.array(results[selected_scenario_name]["dict_months_max"]["total_delivered"]) - np.array(results[selected_scenario_name]["dict_months_max"]["grid"]),
-        "Totalt (kW)" : results[selected_scenario_name]["dict_months_max"]["total"],
-        "Totalt levert (kW)" : results[selected_scenario_name]["dict_months_max"]["total_delivered"],
-        "Scenario (kWh)" : results[selected_scenario_name]["dict_months_sum"]["grid"],
-        "Renewable (kWh)" : np.array(results[selected_scenario_name]["dict_months_sum"]["total_delivered"]) - np.array(results[selected_scenario_name]["dict_months_sum"]["grid"]),
-        "Totalt (kWh)" : results[selected_scenario_name]["dict_months_sum"]["total"],
-        "Totalt levert (kWh)" : results[selected_scenario_name]["dict_months_sum"]["total_delivered"],
-    })
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        metric(text = "Dagens behov fra strømnettet", color = BEFORE_COLOR, energy = results[selected_scenario_name]["dict_sum"]["total_delivered"], effect = results[selected_scenario_name]["dict_max"]["total_delivered"])
-        with st.expander("Mer informasjon"):
-            st.markdown(download_link(df = df, filename = "data.csv"), unsafe_allow_html=True)
-    with col2:
-        metric(text = f"Ny fornybar energi (*{selected_scenario_name}*)", color = RENEWABLE_COLOR, energy = np.sum(df["Renewable (kWh)"]), effect = np.max(df["Renewable (kW)"]))
-        with st.expander("Mer informasjon"):
-            st.markdown(download_link(df = df, filename = "data.csv"), unsafe_allow_html=True)
-    with col3:
-        energy_reduction = (100 - int(results[selected_scenario_name]['dict_sum']['grid']/results[selected_scenario_name]['dict_sum']['total_delivered'] * 100))
-        effect_reduction = (100 - int(results[selected_scenario_name]['dict_max']['grid']/results[selected_scenario_name]['dict_max']['total_delivered'] * 100))
-        metric(text = f"Fremtidig behov fra strømnettet (*{selected_scenario_name}*)", color = AFTER_COLOR, energy = results[selected_scenario_name]["dict_sum"]["grid"], effect = results[selected_scenario_name]["dict_max"]["grid"], energy_reduction = energy_reduction, effect_reduction = effect_reduction)
-        with st.expander("Mer informasjon"):
-            st.markdown(download_link(df = df, filename = "data.csv"), unsafe_allow_html=True)
-    #with col3:
-    #    metric(text = "Historisk behov fra strømnettet", color = HISTORIC_COLOR, energy = results[selected_scenario_name]["dict_sum"]["total"], effect = results[selected_scenario_name]["dict_max"]["total"])
-    
-    
-    y_max_energy = np.max(df["Totalt (kWh)"] * 1.1)
-    y_max_effect = np.max(df["Totalt (kW)"] * 1.1)
+    st.write(f"**{selected_scenario_name}**")
+    with st.expander("Hva ligger i dette scenariet?"):
+        st.write("...")
+    HOURS = np.arange(0, 8760)
     fig = go.Figure()
-    COLORS = [AFTER_COLOR, RENEWABLE_COLOR, TOTAL_COLOR]
-    kWh_labels = ['Scenario (kWh)', "Renewable (kWh)"]
-    kW_labels = ['Scenario (kW)', "Renewable (kW)", "Totalt levert (kW)"]
-    for i, series in enumerate(kWh_labels):
-        bar = go.Bar(x=df['Måneder'], y=df[series], name=series, yaxis='y', marker=dict(color=COLORS[i], line=dict(color='black', width=2)))
-        fig.add_trace(bar)
-    for i, series in enumerate(kW_labels):
-        fig.add_trace(go.Scatter(x=df['Måneder'], y=df[series], name=series, yaxis='y2', mode='lines+markers', line=dict(width=1, color="black", dash = "dot"), marker=dict(color=COLORS[i], symbol="diamond", line=dict(width=1, color = "black"))))
+    renewable_array = np.array(results[selected_scenario_name]["dict_arrays"]["total_delivered"]) - np.array(results[selected_scenario_name]["dict_arrays"]["grid"])
+    fig.add_trace(
+        go.Scatter(
+            x=HOURS,
+            y=renewable_array,
+            hoverinfo='skip',
+            stackgroup="one",
+            fill="tonexty",
+            line=dict(width=0, color=RENEWABLE_COLOR),
+            name=f'Ny fornybar energi:<br>{int(round(np.sum(renewable_array),-3)):,} kWh/år<br>{int(round(np.max(renewable_array),-1)):,} kW'.replace(",", " ")
+            ))
+    fig.add_trace(
+        go.Scatter(
+            x=HOURS,
+            y=results[selected_scenario_name]["dict_arrays"]["grid"],
+            hoverinfo='skip',
+            stackgroup="one",
+            fill="tonexty",
+            line=dict(width=0, color=ELECTRIC_COLOR),
+            name=f'Behov fra strømnettet:<br>{int(round(results[selected_scenario_name]["dict_sum"]["grid"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["grid"],-1)):,} kW'.replace(",", " ")
+            ))
+
     fig.update_layout(
-        showlegend=False,
+        legend=dict(
+            x=0,
+            y=1,
+            orientation='h',
+            xanchor='left',
+            yanchor='top',
+            title=None,
+            bgcolor='rgba(255, 255, 255, 0.5)',
+            font=dict(size=13)
+        ),
+        showlegend=True,
         margin=dict(b=0, t=0),
-        yaxis=dict(title=None, side='left', showgrid=True, tickformat=",.0f", range=[0, y_max_energy]),
-        yaxis2=dict(title=None, side='right', overlaying='y', showgrid=True, range=[0, y_max_effect]),
-        xaxis=dict(title=None, showgrid=True, tickformat=",.0f"),
         barmode='relative',
-        yaxis_ticksuffix=" kWh",
-        yaxis2_ticksuffix=" kW",
+        #yaxis_ticksuffix=" kW",
         separators="* .*",
-        height=250
+        height=300,
+        yaxis=dict(
+            title="Effekt (kW)",
+            side='left', 
+            showgrid=True, 
+            tickformat=",.0f", 
+            range=[0, results[selected_scenario_name]["dict_max"]["total"] * 1.5]),
+        xaxis = dict(
+            tickmode = 'array', 
+            tickvals = [0, 24 * (31), 24 * (31 + 28), 24 * (31 + 28 + 31), 24 * (31 + 28 + 31 + 30), 24 * (31 + 28 + 31 + 30 + 31), 24 * (31 + 28 + 31 + 30 + 31 + 30), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30 + 31)], 
+            ticktext = ["1.jan", "", "1.mar", "", "1.mai", "", "1.jul", "", "1.sep", "", "1.nov", "", "1.jan"],
+            title=None,
+            showgrid=True)
         )
     st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
+    c1, c2 = st.columns(2)
+    energy_reduction = int(round(((results[selected_scenario_name]["dict_sum"]["total_delivered"] - results[selected_scenario_name]["dict_sum"]["grid"])/results[selected_scenario_name]["dict_sum"]["total_delivered"])*100,1))
+    effect_reduction = int(round(((results[selected_scenario_name]["dict_max"]["total_delivered"] - results[selected_scenario_name]["dict_max"]["grid"])/results[selected_scenario_name]["dict_max"]["total_delivered"])*100,1))
+    with c1:
+        energy = results[selected_scenario_name]["dict_sum"]["grid"]
+        st.write("**Energi** fra strømnettet")
+        st.metric(label = "Per bygg", value = f'{int(round(energy,-3)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+        st.metric(label = "Per boligenhet", value = f'{int(round(energy/boligenhet,-2)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+        st.metric(label = "Per hybelenhet", value = f'{int(round(energy/hybelenhet,-1)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+        st.metric(label = "Per arealenhet", value = f'{int(round(energy/arealenhet,0)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+    with c2:
+        st.write("**Makseffekt** fra strømnettet")
+        effect = results[selected_scenario_name]["dict_max"]["grid"]
+        st.metric(label = "Per bygg", value = f'{int(round(effect,-1)):,} kW'.replace(",", " "), label_visibility='visible')
+        st.metric(label = "Per boligenhet", value = f'{int((effect/boligenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+        st.metric(label = "Per hybelenhet", value = f'{int((effect/hybelenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+        st.metric(label = "Per arealenhet", value = f'{int((effect/arealenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
 
 def energy_effect_comparison_plot():
     st.markdown(f"<span style='color:{AFTER_COLOR}'>Fremtidig behov fra strømnettet for alle scenariene (kWh/år og kW)".replace(",", " "), unsafe_allow_html=True)
@@ -598,25 +751,56 @@ def energy_effect_comparison_plot():
     df = df[df['scenario'] != 'Referansesituasjon']
     df = pd.concat([reference_row, df])
     df.reset_index(drop=True, inplace=True)
-    y_max_energy = np.max(df["energy"] * 1.1)
-    y_max_effect = np.max(df["effect"] * 1.1)
+    y_max_energy = np.max(df["energy"] * 1.5)
+    y_max_effect = np.max(df["effect"] * 1.5)
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=df["scenario"], y=df["energy"], marker=dict(color=AFTER_COLOR)))
-    fig.add_trace(go.Scatter(x=df["scenario"], y=df["effect"], yaxis='y2', mode='lines+markers', line=dict(width=1, color="black", dash = "dot"), marker=dict(color=AFTER_COLOR, symbol="diamond", line=dict(width=1, color = "black"))))
+    fig.add_trace(go.Bar(x=df["scenario"], y=df["energy"], name="Energi (kWh)", marker=dict(color=AFTER_COLOR)))
+    fig.add_trace(go.Scatter(x=df["scenario"], y=df["effect"], yaxis='y2', mode='lines+markers', name="Makseffekt (kW)", line=dict(width=1, color="black", dash = "dot"), marker=dict(color=AFTER_COLOR, symbol="diamond", line=dict(width=1, color = "black"))))
     fig.update_layout(
-        showlegend=False,
-        margin=dict(b=0, t=0),
-        yaxis=dict(title=None, side='left', showgrid=True, tickformat=",.0f", range=[0, y_max_energy]),
-        yaxis2=dict(title=None, side='right', overlaying='y', showgrid=True, range=[0, y_max_effect]),
+        showlegend=True,
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.01
+        ),
+        margin=dict(b=50, t=50, l=50, r=50),
+        yaxis=dict(title="Energi (kWh)", side='left', showgrid=True, tickformat=",.0f", range=[0, y_max_energy]),
+        yaxis2=dict(title="Makseffekt (kW)", side='right', overlaying='y', showgrid=True, range=[0, y_max_effect]),
         xaxis=dict(title=None, showgrid=True, tickformat=",.0f"),
-        yaxis_ticksuffix=" kWh/år",
-        yaxis2_ticksuffix=" kW",
+        #yaxis_ticksuffix=" kWh/år",
+        #yaxis2_ticksuffix=" kW",
         separators="* .*",
-        height=300
+        height=400
         )
     st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
     #st.markdown(download_link(df = df, filename = "data.csv"), unsafe_allow_html=True)
 
+def district_heating_counter(current_value):
+    fig = go.Figure(go.Indicator(
+        mode = "gauge+number",
+        value = current_value,
+        domain = {'x': [0, 1], 'y': [0, 1]},
+        gauge = {
+            'axis': {'range': [0, 1750*2], 'tickwidth': 1, 'tickcolor': "#1d3c34"},
+            'bar': {'color': "#1d3c34"},
+            'bgcolor': "white",
+            'borderwidth': 2,
+            'bordercolor': "#1d3c34",
+            'steps': [
+                {'range': [0, 1750], 'color': '#F6F8F1'},
+                {'range': [1750, 1750*2], 'color': '#F0F4E3'}],
+            'threshold': {
+                'line': {'color': "#1d3c34", 'width': 4},
+                'thickness': 1,
+                'value': 1750}}))
+    fig.update_layout(
+        margin=dict(l=50, r=50, t=50, b=50),  # Set margins to zero
+        height=300,  # Adjust the height of the plot
+    )
+    st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
+    
+        
 def duration_curve_plot():
     st.markdown(f"<span style='color:{AFTER_COLOR}'>Fremtidig behov fra strømnettet for alle scenariene som varighetskurver".replace(",", " "), unsafe_allow_html=True)
     keys = list(results.keys())
@@ -640,14 +824,17 @@ def duration_curve_plot():
     #st.info("Tips! Klikk på teksten i tegnforklaringen for å skru kurvene av/på.", icon="ℹ️")
 
 start_time = time.time()
-streamlit_settings(title="Energy Plan Zero, Kringsjå", icon="h")
+streamlit_settings(title="Energianalyse Kringsjå", icon="h")
 with st.sidebar:
-    
+    #c1, c2 = st.columns([1,1])
+    st.image('src/img/sio-av.png', use_column_width="auto")
     #st.header("Energianalyse Kringsjå")
-    #st.image('src/img/sio-logo.png', use_column_width = "auto")
+    #with c1:
+    #with c2:
     my_bar = st.progress(0, text="Tegn polygon")
-    st.header("Forutsetninger")
-COLUMN_1, COLUMN_2 = st.columns([1, 1])
+    
+    
+#COLUMN_1, COLUMN_2 = st.columns([1, 3])
 ###############
 ###############
 MONTHS = ["jan", "feb", "mar", "apr", "mai", "jun", "jul", "aug", "sep", "okt", "nov", "des"]
@@ -655,30 +842,77 @@ SPACEHEATING_COLOR = "#ff9966"
 HISTORIC_COLOR = "#0000A3"
 BEFORE_COLOR = "black"
 RENEWABLE_COLOR = "green"
-AFTER_COLOR = "#5C5CFF"
+AFTER_COLOR = "#48a23f"
 DHW_COLOR = "#b39200"
-THERMAL_COLOR = "#FF0000"
-ELECTRIC_COLOR = "blue"
-ELSPECIFIC_COLOR = "#3399ff"
-GRID_COLOR = "#7f7f7f"
+THERMAL_COLOR = "#1d3c34"
+ELECTRIC_COLOR = "#aeb9b6"
+ELSPECIFIC_COLOR = "#aeb9b6"
+GRID_COLOR = "#1d3c34"
 STAND_OUT_COLOR = "#48a23f"
 BASE_COLOR = "#1d3c34"
-TOTAL_COLOR = "#1d3c34"
-PRODUCED_HEAT_COLOR = "#cc0000"
+TOTAL_COLOR = "#627871"
+PRODUCED_HEAT_COLOR = "#1d3c34"
 PRODUCED_EL_COLOR = "lightblue"
+###############
+###############
+#with st.sidebar:
+#    with st.expander("Simulering"):
+#        if st.button("Kjør simulering"):
+#           energy_analysis = EnergyAnalysis(
+#                building_table = "building_table_østmarka_v2.xlsx",
+#                energy_area_id = "energiomraadeid",
+#                building_area_id = "bygningsomraadeid",
+#                scenario_file_name = "input/scenarier.xlsx",
+#                temperature_array_file_path = "input/utetemperatur.xlsx")
+#           energy_analysis.main()
 ###############
 ###############
 SCENARIO_NAMES = find_scenario_names("output")
 #SCENARIO_NAMES = ['Referansesituasjon', 'Fjernvarme for Ringve VGS', 'Høyblokker med bergvarme', 'Solceller på alle tak']
-selected_scenario_name = select_scenario()
-df_position = read_position(f'output/{selected_scenario_name}')
-df_position = building_plan_filter(df_position)
-SCENARIO_COMPARISON = scenario_comparison()
+with st.sidebar:
+    st.caption("Hvordan bruke kartapplikasjonen?")
+    with st.expander(" 1 Konfigurering", expanded=False):
+        st.write("""Vi har allerede hentet inn bygningsdata fra matrikkelen 
+                 for byggene i området samt hentet inn reelle data for fjernvarmen i området.
+                 Det er bygget opp 12 ulike scenarier med ulike variasjoner av 
+                 grunnvarme, fjernvarme, varmepumper, solceller og oppgradering av bygningsmassen.""")
+    with st.expander(" 2 Velg scenario", expanded=True):
+        st.write("""Utforsk ulike 
+                energiscenarier ved å velge ett alternativ fra venstremenyen. 
+                Dette kan inkludere energieffektiviseringstiltak som grunnvarme, fjernvarme, 
+                solceller, varmepumper, oppgradering av byginngsmasse samt kombinasjoner av disse.""")
+        selected_scenario_name = select_scenario()
+        show_scenarios = st.checkbox("Vis scenario på kart", value = True)
+        if show_scenarios == True:
+            df_position = read_position(f'output/{selected_scenario_name}')
+        else:
+            df_position = read_position(f'output/Referansesituasjon')
+        df_position = building_plan_filter(df_position)
+    with st.expander(" 3 Tegn ditt utvalg", expanded=False):
+        st.write("""Bruk tegneverktøyet øverst til høyre i kartet 
+                for å markere et område ved å tegne et polygon 
+                rundt de bygningene du ønsker å analysere. 
+                Dette kan være et enkelt bygg eller flere bygninger samlet.""")
+    with st.expander(" 4 Visualiser resultater"):
+        st.write("""Resultatene vises øyeblikkelig, og 
+                du kan utforske dem gjennom grafiske representasjoner.
+                Se hvordan tiltakene påvirker bygningenes energi- og effektreduksjon, 
+                og identifiser de mest effektive tiltakene. Huk av for 
+                 sammenlign scenarier for å se en sammenstilling av alle scenariene innenfor utvalget.""")
+        
+        SCENARIO_COMPARISON = scenario_comparison()
+
+#SCENARIO_COMPARISON = scenario_comparison()
 folium_map, gdf_buildings = create_map(df_position = df_position)
-with COLUMN_1:
-    st_map = display_map(folium_map)
-with COLUMN_2:
-    filtered_gdf = spatial_join(gdf_buildings)
+st_map = display_map(folium_map)
+filtered_gdf = spatial_join(gdf_buildings)
+if len(filtered_gdf) == 0:
+    st.warning('Det er ingen bygg innenfor tegnet polygon. Prøv igjen.', icon="⚠️")
+    st.stop()
+
+arealenhet = (filtered_gdf["bruksareal_totalt"].to_numpy().sum())
+hybelenhet = (filtered_gdf["he"].to_numpy().sum())
+boligenhet = (filtered_gdf["bolig"].to_numpy().sum())
 
 object_ids = filtered_gdf['objectid'].astype(str)
 object_ids['ID'] = 'ID'
@@ -713,23 +947,28 @@ for scenario_name in SCENARIO_NAMES:
 ######################################################################
 ######################################################################
 ######################################################################
-    
+COLUMN_1, COLUMN_2 = st.columns([1, 1])    
+with COLUMN_1:
+    energy_effect_delivered_plot()
 with COLUMN_2:
-    tab1, tab2 = st.tabs(["Nåværende", "Fremtidig"])
-    #with tab1:
-    #    energy_effect_plot()
-    with tab1:
-        energy_effect_delivered_plot()
-    with tab2:
-        energy_effect_scenario_plot()
+    energy_effect_scenario_plot()
+download_data()
 my_bar.progress(int(i + (100 - i)/2), text = "Lager figurer...") 
 ######################################################################
 if SCENARIO_COMPARISON == True:
-    COLUMN_1, COLUMN_2 = st.columns([1.5, 1])
-    with COLUMN_1:
-        energy_effect_comparison_plot()
-    with COLUMN_2:
-        duration_curve_plot()
+    st.markdown("")
+#    COLUMN_1, COLUMN_2 = st.columns([1, 3])
+#    with COLUMN_1:
+#        st.caption("Scenariosammenligning")
+#        st.write("""
+#            Sammenlign resultater fra ulike scenarioer ved å vise 
+#            dem side om side. Identifiser hvilke scenarier som 
+#            trenger minst strøm fra nettet (kWh/år og kW).""")
+#        #energy_effect_comparison_plot()
+#    with COLUMN_2:
+    st.markdown("---")
+    energy_effect_comparison_plot()
+        #duration_curve_plot()
     
 my_bar.progress(100, text="Fullført") 
 
