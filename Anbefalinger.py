@@ -42,6 +42,7 @@ def download_pdf():
 
 
 streamlit_settings(title="Energy Plan Zero, Kringsjå", icon="h")
+st.warning("Under arbeid...")
 st.title("Energiplan Kringsjå")
 st.header("Innledning")
 with st.sidebar:
