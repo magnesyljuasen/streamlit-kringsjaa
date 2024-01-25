@@ -13,11 +13,10 @@ from shapely.geometry import Point, Polygon
 from folium.plugins import Fullscreen
 import time
 import base64
-import geojson
 
 
 def streamlit_settings(title, icon):
-    st.set_page_config(page_title=title, page_icon=icon, layout="wide")
+    st.set_page_config(page_title=title, page_icon=icon, layout="wide", initial_sidebar_state='collapsed')
     st.markdown("""<style>[data-testid="collapsedControl"] svg {height: 3rem;width: 3rem;}</style>""", unsafe_allow_html=True)   
     st.markdown(
         """
