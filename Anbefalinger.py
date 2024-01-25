@@ -18,7 +18,7 @@ from streamlit_extras.switch_page_button import switch_page
 
 
 def streamlit_settings(title, icon):
-    st.set_page_config(page_title=title, page_icon=icon, layout="centered")
+    st.set_page_config(page_title=title, page_icon=icon, layout="centered", initial_sidebar_state='collapsed')
     with open("src/styles/main.css") as f:
         st.markdown("<style>{}</style>".format(f.read()), unsafe_allow_html=True)
     st.markdown(
