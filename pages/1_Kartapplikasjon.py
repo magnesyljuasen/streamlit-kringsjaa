@@ -108,7 +108,7 @@ def create_map(df_position):
                 border_width=1,
                 border_color=text_color,
                 text_color=text_color,
-                # background_color = "#FFFFFF00",
+                background_color = "#FFFFFF00",
                 icon_shape="circle",
                 number=text,
                 icon_size=(20, 20),
@@ -128,7 +128,8 @@ def create_map(df_position):
             icon = folium.plugins.BeautifyIcon(
                 #prefix="glyphicon glyphicon-resize-full",
                 border_color=border_color,
-                text_color="white",
+                background_color = "#FFFFFF00",
+                text_color="#FFFFFF00",
                 icon_shape="circle",
                 icon_size=(20 + percentage, 20 + percentage),
 
@@ -520,17 +521,7 @@ def energy_effect_delivered_plot():
             line=dict(width=0, color=ELECTRIC_COLOR),
             name=f'Elspesifikt (behov fra strømnettet):<br>{int(round(results[selected_scenario_name]["dict_sum"]["electric"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["electric"],-1)):,} kW'.replace(",", " ")
             ))
-    if results[selected_scenario_name]["dict_sum"]["produced_el"] > 1:
-        fig.add_trace(
-            go.Scatter(
-                x=HOURS,
-                y=results[selected_scenario_name]["dict_arrays"]["produced_el"],
-                hoverinfo='skip',
-                stackgroup="one",
-                fill="tonexty",
-                line=dict(width=0, color=PRODUCED_EL_COLOR),
-                name=f'Strøm fra solceller:<br>{int(round(results[selected_scenario_name]["dict_sum"]["produced_el"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["produced_el"],-1)):,} kW'.replace(",", " ")
-                ))
+    
     fig.add_trace(
         go.Scatter(
             x=HOURS,
@@ -551,6 +542,17 @@ def energy_effect_delivered_plot():
                 fill="tonexty",
                 line=dict(width=0, color=PRODUCED_HEAT_COLOR),
                 name=f'Tappevannsproduksjon:<br>{int(round(results[selected_scenario_name]["dict_sum"]["produced_heat"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["produced_heat"],-1)):,} kW'.replace(",", " ")
+                ))
+    if results[selected_scenario_name]["dict_sum"]["produced_el"] > 1:
+        fig.add_trace(
+            go.Scatter(
+                x=HOURS,
+                y=results[selected_scenario_name]["dict_arrays"]["produced_el"],
+                hoverinfo='skip',
+                stackgroup="one",
+                fill="tonexty",
+                line=dict(width=0, color=PRODUCED_EL_COLOR),
+                name=f'Strøm fra solceller:<br>{int(round(results[selected_scenario_name]["dict_sum"]["produced_el"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["produced_el"],-1)):,} kW'.replace(",", " ")
                 ))
     fig.update_layout(
         legend=dict(
@@ -593,7 +595,7 @@ def energy_effect_delivered_plot():
         st.metric(label = "Per arealenhet", value = f'{int(round(energy/arealenhet,0)):,} kWh/år'.replace(",", " "), label_visibility='visible')
     with c2:
         effect = results[selected_scenario_name]["dict_max"]["total_delivered"]
-        st.write("**Effekt** fra strømnettet")
+        st.write("**Makseffekt** fra strømnettet")
         st.metric(label = "Per bygg", value = f'{int(round(effect,-1)):,} kW'.replace(",", " "), label_visibility='visible')
         st.metric(label = "Per boligenhet", value = f'{int((effect/boligenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
         st.metric(label = "Per hybelenhet", value = f'{int((effect/hybelenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
@@ -850,8 +852,8 @@ GRID_COLOR = "#1d3c34"
 STAND_OUT_COLOR = "#48a23f"
 BASE_COLOR = "#1d3c34"
 TOTAL_COLOR = "#627871"
-PRODUCED_HEAT_COLOR = "#1d3c34"
-PRODUCED_EL_COLOR = "lightblue"
+PRODUCED_HEAT_COLOR = "#48a23f"
+PRODUCED_EL_COLOR = "#FFC358"
 ###############
 ###############
 #with st.sidebar:
