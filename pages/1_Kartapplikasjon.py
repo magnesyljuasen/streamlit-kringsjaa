@@ -127,7 +127,8 @@ def create_map(df_position):
             #text = row["har_adresse"]
             icon = folium.plugins.BeautifyIcon(
                 #prefix="glyphicon glyphicon-resize-full",
-                border_color=border_color,
+                #border_color=border_color,
+                border_color="#FFFFFF00",
                 background_color = "#FFFFFF00",
                 text_color="#FFFFFF00",
                 icon_shape="circle",
@@ -190,7 +191,7 @@ def create_map(df_position):
     #gdf_buildings = gdf_buildings.drop(columns=['y', 'x'])
     #geojson_buildings = gdf_buildings.to_json()
     #marker_cluster = add_marker_cluster_to_map()
-    marker_layer = folium.FeatureGroup(name='Bygninger')
+    marker_layer = folium.FeatureGroup(name='BygningerLAG', control=False)
     for index, row in df_position.iterrows():
         popup_text, tooltip_text, icon = styling_function(row)
         marker = folium.Marker(
@@ -203,6 +204,27 @@ def create_map(df_position):
     
     folium_map.add_child(marker_layer)
 
+    def building_styling_function(feature):
+        property_value = feature['properties']['Romoppvarming']
+        if property_value == 'Panelovn':
+            return {'fillColor': 'red', 'fillOpacity': 0.25, 'color': 'black', 'weight': 1}
+        elif property_value == 'Radiator':
+            return {'fillColor': 'blue', 'fillOpacity': 0.25, 'color': 'black', 'weight': 1}
+        elif property_value == 'Elektrisk gulvvarme på bad. Ventilasjonsvarme':
+            return {'fillColor': 'lightblue', 'fillOpacity': 0.25, 'color': 'black', 'weight': 1}
+        elif property_value == 'Gulvvarme/Radiator':
+            return {'fillColor': 'green', 'fillOpacity': 0.25, 'color': 'black', 'weight': 1}
+        else:
+            return {'fillColor': 'gray', 'fillOpacity': 0.25, 'color': 'black', 'weight': 1}
+
+    folium.GeoJson(
+        "src/geojson/BYGNINGER_POLYGON.geojson",
+        style_function=building_styling_function,
+        control=True,
+        show = True,
+        name="Bygninger",
+        ).add_to(folium_map)
+    
     folium.GeoJson(
         "src/geojson/EKSISTERENDE_BRØNNER.geojson",
         style_function=lambda feature: {"color": "#0000FF", "fillOpacity": 0.5} if feature["properties"]["Varmesentral"] == "Varmesentral 1" else {"color": "#0096FF", "fillOpacity": 0.5},
@@ -235,7 +257,7 @@ def create_map(df_position):
             weight=7)
             ).add_to(folium_map)
     folium.GeoJson(
-        "src/geojson/VARMTVANNSTRASE.geojson",
+        "src/geojson/VARMTVANNSTRASE_NY.geojson",
         control=True,
         show = False,
         name="Varmtvannstrase",
@@ -247,10 +269,12 @@ def create_map(df_position):
         show = False,
         name="Varmesentraler",
         marker=folium.Circle(
-            radius=10, 
-            weight=7)
+            radius=14,
+            fill=True,
+            fill_opacity=0.6, 
+            weight=1)
             ).add_to(folium_map)
-
+        
     add_wms_layer_to_map(
         url = "https://geo.ngu.no/mapserver/LosmasserWMS2?request=GetCapabilities&service=WMS",
         layer = "Losmasse_flate",
@@ -280,7 +304,7 @@ def create_map(df_position):
     folium_map.add_child(drawing)
     drawing.add_to(folium_map)
     Fullscreen().add_to(folium_map)
-    folium.LayerControl(position="bottomleft").add_to(folium_map)
+    folium.LayerControl(position="bottomleft", collapsed = False).add_to(folium_map)
     folium_map.options["attributionControl"] = False
     return folium_map, gdf_buildings
 
