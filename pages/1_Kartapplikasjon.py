@@ -114,7 +114,7 @@ def create_map(df_position):
                 icon_size=(20, 20),
             )
         else:
-            percentage = ((row["bruksareal_totalt"]/11503)*100)/3
+            percentage = ((row["_nettutveksling_energi"]/970500)*100)/3
             border_color = "black"
             if row["varmeløsning"] == "Panelovn":
                 border_color = "red"
@@ -496,8 +496,6 @@ def energy_effect_plot():
 
 def energy_effect_delivered_plot():
     st.write("**Referansesituasjon**")
-    with st.expander("Hva ligger i dette scenariet?"):
-        st.write("...")
     HOURS = np.arange(0, 8760)
     fig = go.Figure()
 #    fig.add_trace(
@@ -651,8 +649,6 @@ def download_data():
     
 def energy_effect_scenario_plot():
     st.write(f"**{selected_scenario_name}**")
-    with st.expander("Hva ligger i dette scenariet?"):
-        st.write("...")
     HOURS = np.arange(0, 8760)
     fig = go.Figure()
     renewable_array = np.array(results[selected_scenario_name]["dict_arrays"]["total_delivered"]) - np.array(results[selected_scenario_name]["dict_arrays"]["grid"])
@@ -826,6 +822,10 @@ def duration_curve_plot():
 
 start_time = time.time()
 streamlit_settings(title="Energianalyse Kringsjå", icon="h")
+
+if 'last_active_drawing' not in st.session_state:
+    st.session_state.last_active_drawing = pd.DataFrame()
+
 with st.sidebar:
     #c1, c2 = st.columns([1,1])
     st.image('src/img/sio-av.png', use_column_width="auto")
@@ -883,7 +883,7 @@ with st.sidebar:
                 Dette kan inkludere energieffektiviseringstiltak som grunnvarme, fjernvarme, 
                 solceller, varmepumper, oppgradering av byginngsmasse samt kombinasjoner av disse.""")
         selected_scenario_name = select_scenario()
-        show_scenarios = st.checkbox("Vis scenario på kart", value = True)
+        show_scenarios = st.checkbox("Vis scenario på kart", value = False, help = "Skru på denne og vis scenarier på kart. Merk at denne vil refreshe siden for hver gang du trykker på en ny knapp.")
         if show_scenarios == True:
             df_position = read_position(f'output/{selected_scenario_name}')
         else:
@@ -906,6 +906,9 @@ with st.sidebar:
 #SCENARIO_COMPARISON = scenario_comparison()
 folium_map, gdf_buildings = create_map(df_position = df_position)
 st_map = display_map(folium_map)
+
+
+
 filtered_gdf = spatial_join(gdf_buildings)
 if len(filtered_gdf) == 0:
     st.warning('Det er ingen bygg innenfor tegnet polygon. Prøv igjen.', icon="⚠️")
@@ -948,11 +951,14 @@ for scenario_name in SCENARIO_NAMES:
 ######################################################################
 ######################################################################
 ######################################################################
-COLUMN_1, COLUMN_2 = st.columns([1, 1])    
-with COLUMN_1:
+if selected_scenario_name == "Referansesituasjon":
     energy_effect_delivered_plot()
-with COLUMN_2:
-    energy_effect_scenario_plot()
+else:
+    COLUMN_1, COLUMN_2 = st.columns([1, 1])    
+    with COLUMN_1:
+        energy_effect_delivered_plot()
+    with COLUMN_2:
+        energy_effect_scenario_plot()
 download_data()
 my_bar.progress(int(i + (100 - i)/2), text = "Lager figurer...") 
 ######################################################################
