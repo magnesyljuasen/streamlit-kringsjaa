@@ -13,6 +13,7 @@ from shapely.geometry import Point, Polygon
 from folium.plugins import Fullscreen
 import time
 import base64
+from streamlit_extras.switch_page_button import switch_page
 
 
 def streamlit_settings(title, icon):
@@ -224,6 +225,38 @@ def create_map(df_position):
         show = True,
         name="Bygninger",
         ).add_to(folium_map)
+
+    def building_styling_function_solfanger(feature):
+        property_value = feature['properties']["Sol"]
+        #property_value = feature['properties']['Romoppvarming']
+        if property_value == 'Solfanger':
+            return {'fillColor': 'orange', 'fillOpacity': 0.75, 'color': 'black', 'weight': 1}
+        else:
+            return {'fillColor': 'gray', 'fillOpacity': 0, 'color': 'black', 'weight': 0}
+
+    folium.GeoJson(
+        "src/geojson/BYGNINGER_POLYGON.geojson",
+        style_function=building_styling_function_solfanger,
+        control=True,
+        show = False,
+        name="Solfanger",
+        ).add_to(folium_map)
+
+    def building_styling_function_solar(feature):
+        property_value = feature['properties']["Sol"]
+        #property_value = feature['properties']['Romoppvarming']
+        if property_value == 'Solceller':
+            return {'fillColor': 'yellow', 'fillOpacity': 0.75, 'color': 'black', 'weight': 1}
+        else:
+            return {'fillColor': 'gray', 'fillOpacity': 0, 'color': 'black', 'weight': 0}
+
+    folium.GeoJson(
+        "src/geojson/BYGNINGER_POLYGON.geojson",
+        style_function=building_styling_function_solar,
+        control=True,
+        show = False,
+        name="Solceller",
+        ).add_to(folium_map)
     
     folium.GeoJson(
         "src/geojson/EKSISTERENDE_BRØNNER.geojson",
@@ -246,16 +279,16 @@ def create_map(df_position):
             color="#0047AB", 
             weight=1)
             ).add_to(folium_map)
-    folium.GeoJson(
-        "src/geojson/VASKEROM.geojson",
-        control=True,
-        show = False,
-        name="Vaskerom",
-        marker=folium.Circle(
-            fill_color="red",
-            radius=10, 
-            weight=7)
-            ).add_to(folium_map)
+#    folium.GeoJson(
+#        "src/geojson/VASKEROM.geojson",
+#        control=True,
+#        show = False,
+#        name="Vaskerom",
+#        marker=folium.Circle(
+#            fill_color="red",
+#            radius=10, 
+#            weight=7)
+#            ).add_to(folium_map)
     folium.GeoJson(
         "src/geojson/VARMTVANNSTRASE_NY.geojson",
         control=True,
@@ -290,7 +323,7 @@ def create_map(df_position):
         show = False
         )
     drawing = folium.plugins.Draw(
-        position="topright",
+        position="topleft",
         draw_options={
             "polyline": False,
             "rectangle": False,
@@ -303,8 +336,8 @@ def create_map(df_position):
     )
     folium_map.add_child(drawing)
     drawing.add_to(folium_map)
-    Fullscreen().add_to(folium_map)
-    folium.LayerControl(position="bottomleft", collapsed = False).add_to(folium_map)
+    folium.LayerControl(position="bottomright", collapsed = False).add_to(folium_map)
+    Fullscreen(position="topleft").add_to(folium_map)
     folium_map.options["attributionControl"] = False
     return folium_map, gdf_buildings
 
@@ -362,6 +395,7 @@ def select_scenario():
     option_list.remove('Referansesituasjon')
     option_list.append('Referansesituasjon')
     scenario_name = st.radio(label='Velg scenario', options=option_list, index=len(option_list) - 1)
+    st.info("Tiltak som allerede er etablert (brønnpark til tappevann og solceller/solfanger på enkelte bygg er inkludert i alle scenarier)", icon="ℹ️")
     return scenario_name
 
 def get_dict_arrays(df_hourly_data):
@@ -611,17 +645,23 @@ def energy_effect_delivered_plot():
     with c1:
         energy = results[selected_scenario_name]["dict_sum"]["total_delivered"]
         st.write("**Energi** fra strømnettet")
-        st.metric(label = "Per bygg", value = f'{int(round(energy,-3)):,} kWh/år'.replace(",", " "), label_visibility='visible')
-        st.metric(label = "Per boligenhet", value = f'{int(round(energy/boligenhet,-2)):,} kWh/år'.replace(",", " "), label_visibility='visible')
-        st.metric(label = "Per hybelenhet", value = f'{int(round(energy/hybelenhet,-1)):,} kWh/år'.replace(",", " "), label_visibility='visible')
-        st.metric(label = "Per arealenhet", value = f'{int(round(energy/arealenhet,0)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+        st.metric(label = "Totalt for byggene i valgt område", value = f'{int(round(energy,-3)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+        if boligenhet > 0:
+            st.metric(label = "Per boligenhet", value = f'{int(round(energy/boligenhet,-2)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+        if hybelenhet > 0:
+            st.metric(label = "Per hybelenhet", value = f'{int(round(energy/hybelenhet,-1)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+        if arealenhet > 0:
+            st.metric(label = "Per arealenhet (㎡)", value = f'{int(round(energy/arealenhet,0)):,} kWh/år'.replace(",", " "), label_visibility='visible')
     with c2:
         effect = results[selected_scenario_name]["dict_max"]["total_delivered"]
         st.write("**Makseffekt** fra strømnettet")
-        st.metric(label = "Per bygg", value = f'{int(round(effect,-1)):,} kW'.replace(",", " "), label_visibility='visible')
-        st.metric(label = "Per boligenhet", value = f'{int((effect/boligenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
-        st.metric(label = "Per hybelenhet", value = f'{int((effect/hybelenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
-        st.metric(label = "Per arealenhet", value = f'{int((effect/arealenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+        st.metric(label = "Totalt for byggene i valgt område", value = f'{int(round(effect,-1)):,} kW'.replace(",", " "), label_visibility='visible')
+        if boligenhet > 0:
+            st.metric(label = "Per boligenhet", value = f'{int((effect/boligenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+        if hybelenhet > 0:
+            st.metric(label = "Per hybelenhet", value = f'{int((effect/hybelenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+        if arealenhet > 0:
+            st.metric(label = "Per arealenhet (㎡)", value = f'{int((effect/arealenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
     
 def download_data():
     with st.expander("Mer informasjon"):
@@ -735,16 +775,22 @@ def energy_effect_scenario_plot():
         energy = results[selected_scenario_name]["dict_sum"]["grid"]
         st.write("**Energi** fra strømnettet")
         st.metric(label = "Per bygg", value = f'{int(round(energy,-3)):,} kWh/år'.replace(",", " "), label_visibility='visible')
-        st.metric(label = "Per boligenhet", value = f'{int(round(energy/boligenhet,-2)):,} kWh/år'.replace(",", " "), label_visibility='visible')
-        st.metric(label = "Per hybelenhet", value = f'{int(round(energy/hybelenhet,-1)):,} kWh/år'.replace(",", " "), label_visibility='visible')
-        st.metric(label = "Per arealenhet", value = f'{int(round(energy/arealenhet,0)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+        if boligenhet > 0:
+            st.metric(label = "Per boligenhet", value = f'{int(round(energy/boligenhet,-2)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+        if hybelenhet > 0:
+            st.metric(label = "Per hybelenhet", value = f'{int(round(energy/hybelenhet,-1)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+        if arealenhet > 0:
+            st.metric(label = "Per arealenhet (㎡)", value = f'{int(round(energy/arealenhet,0)):,} kWh/år'.replace(",", " "), label_visibility='visible')
     with c2:
         st.write("**Makseffekt** fra strømnettet")
         effect = results[selected_scenario_name]["dict_max"]["grid"]
         st.metric(label = "Per bygg", value = f'{int(round(effect,-1)):,} kW'.replace(",", " "), label_visibility='visible')
-        st.metric(label = "Per boligenhet", value = f'{int((effect/boligenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
-        st.metric(label = "Per hybelenhet", value = f'{int((effect/hybelenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
-        st.metric(label = "Per arealenhet", value = f'{int((effect/arealenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+        if boligenhet > 0:
+            st.metric(label = "Per boligenhet", value = f'{int((effect/boligenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+        if hybelenhet > 0:
+            st.metric(label = "Per hybelenhet", value = f'{int((effect/hybelenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+        if arealenhet > 0:
+            st.metric(label = "Per arealenhet (㎡)", value = f'{int((effect/arealenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
 
 def energy_effect_comparison_plot():
     st.markdown(f"<span style='color:{AFTER_COLOR}'>Fremtidig behov fra strømnettet for alle scenariene (kWh/år og kW)".replace(",", " "), unsafe_allow_html=True)
@@ -897,15 +943,18 @@ SCENARIO_NAMES = find_scenario_names("output")
 with st.sidebar:
     st.caption("Hvordan bruke kartapplikasjonen?")
     with st.expander(" 1 Konfigurering", expanded=False):
-        st.write("""Vi har allerede hentet inn bygningsdata fra matrikkelen 
-                 for byggene i området samt hentet inn reelle data for fjernvarmen i området.
-                 Det er bygget opp 12 ulike scenarier med ulike variasjoner av 
-                 grunnvarme, fjernvarme, varmepumper, solceller og oppgradering av bygningsmassen.""")
+        st.write(""" Vi har allerede hentet inn bygningsdata fra matrikkelen for byggene i området. 
+                 For å bestemme dagens energi- og effektbehov (referansesituasjonen) har vi tatt utgangspunkt 
+                 i strømmålere samt levert tappevann til hvert bygg. For bygg uten strømmålere, 
+                 er behovet estimert ved hjelp av PROFet(*)  Vi har laget 5 
+                 scenarier med ulike variasjoner av grunnvarme og solceller. 
+                 """)
+        st.caption("(*) PROFet er utviklet av NTNU og SINTEF og beregner energibehovet for bygg på timesbasis. Beregningene baserer seg på type bygg, standard og klima.")
     with st.expander(" 2 Velg scenario", expanded=True):
-        st.write("""Utforsk ulike 
-                energiscenarier ved å velge ett alternativ fra venstremenyen. 
-                Dette kan inkludere energieffektiviseringstiltak som grunnvarme, fjernvarme, 
-                solceller, varmepumper, oppgradering av byginngsmasse samt kombinasjoner av disse.""")
+        st.write(""" Utforsk de 5 scenariene for energi og effekt 
+                 ved å velge ett alternativ fra menyen under. 
+                 Huk av for å vise scenarioet på kartet.
+                 """)
         selected_scenario_name = select_scenario()
         show_scenarios = st.checkbox("Vis scenario på kart", value = False, help = "Skru på denne og vis scenarier på kart. Merk at denne vil refreshe siden for hver gang du trykker på en ny knapp.")
         if show_scenarios == True:
@@ -914,23 +963,28 @@ with st.sidebar:
             df_position = read_position(f'output/Referansesituasjon')
         df_position = building_plan_filter(df_position)
     with st.expander(" 3 Tegn ditt utvalg", expanded=False):
-        st.write("""Bruk tegneverktøyet øverst til høyre i kartet 
-                for å markere et område ved å tegne et polygon 
-                rundt de bygningene du ønsker å analysere. 
-                Dette kan være et enkelt bygg eller flere bygninger samlet.""")
+        st.write(""" Bruk tegneverktøyet øverst til venstre i kartet for å 
+                 markere et område ved å tegne et område rundt de byggene du 
+                 ønsker å analysere. Dette kan være et enkelt bygg eller flere bygninger samlet.
+                 """)
     with st.expander(" 4 Visualiser resultater"):
-        st.write("""Resultatene vises øyeblikkelig, og 
-                du kan utforske dem gjennom grafiske representasjoner.
-                Se hvordan tiltakene påvirker bygningenes energi- og effektreduksjon, 
-                og identifiser de mest effektive tiltakene. Huk av for 
-                 sammenlign scenarier for å se en sammenstilling av alle scenariene innenfor utvalget.""")
+        st.write(""" Resultatene vises umiddelbart som diagrammer og tall. 
+                 Her ser du hvordan tiltakene reduserer behovet for å kjøpe 
+                 strøm fra strømnettet både i topplasttimen (makseffekt) 
+                 og over året. I tillegg vises produksjon av ny fornybar 
+                 energi (solstrøm og varme fra energibrønnene). På denne 
+                 måten blir det lett å identifisere de mest effektive 
+                 tiltakene. Huk av for å sammenligne alle scenarioene 
+                 i det valgte området. 
+                 """)
         
         SCENARIO_COMPARISON = scenario_comparison()
+    if st.button("Gå tilbake"):
+        switch_page("Anbefalinger")
 
 #SCENARIO_COMPARISON = scenario_comparison()
 folium_map, gdf_buildings = create_map(df_position = df_position)
 st_map = display_map(folium_map)
-
 
 
 filtered_gdf = spatial_join(gdf_buildings)
@@ -1016,3 +1070,5 @@ my_bar.progress(100, text="Fullført")
 end_time = time.time()
 #with st.sidebar:
 #    st.title(f"Tidsbruk: {round((end_time - start_time),2)} sekunder")
+
+
