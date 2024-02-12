@@ -177,12 +177,12 @@ with st.expander("Vannbåren varme og oppgradering av bygningsmassen"):
     st.write(""" Generelt oppfordres det til å gjøre en systematisk oppgradering av 
              bygningsmassen slik at den trenger mindre makseffekt og energi 
              over året (klimaskall, ventilasjon, vinduer, etterisolering mm.). """)
-with st.expander("Inkludere kostnader og måledata i energianalysen"):
-    st.write(""" Vi anbefaler å bygge videre på energianalyse-verktøyet som er utviklet for Kringsjå studentby. Dette kan være:""")
-    st.write("- • Vise egenprodusert energi (solstrøm og varme fra energibrønner). ")
-    st.write("- • Løpende verdiberegning av egenprodusert energi ut fra spotpris på strøm.")
-    st.write("- • Inkludere investeringskostnader for ulike energitiltak og beregne lønnsomhet.")
-    st.write("- • Oppdatere bygnings- og anleggsinfo etter hvert som tiltakene gjøres, som en digital tvilling.")
+#with st.expander("Inkludere kostnader og måledata i energianalysen"):
+#    st.write(""" Vi anbefaler å bygge videre på energianalyse-verktøyet som er utviklet for Kringsjå studentby. Dette kan være:""")
+#    st.write("- • Vise egenprodusert energi (solstrøm og varme fra energibrønner). ")
+#    st.write("- • Løpende verdiberegning av egenprodusert energi ut fra spotpris på strøm.")
+#    st.write("- • Inkludere investeringskostnader for ulike energitiltak og beregne lønnsomhet.")
+#    st.write("- • Oppdatere bygnings- og anleggsinfo etter hvert som tiltakene gjøres, som en digital tvilling.")
 
 st.write("")
 st.write("")
