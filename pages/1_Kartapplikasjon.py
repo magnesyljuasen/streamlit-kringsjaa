@@ -606,7 +606,7 @@ def energy_effect_delivered_plot():
                     stackgroup="one",
                     fill="tonexty",
                     line=dict(width=0, color=PRODUCED_HEAT_COLOR),
-                    name=f'Tappevannsproduksjon:<br>{int(round(results[selected_scenario_name]["dict_sum"]["produced_heat"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["produced_heat"],-1)):,} kW'.replace(",", " ")
+                    name=f'Varmeandel fra energisentral (grunnvarme):<br>{int(round(results[selected_scenario_name]["dict_sum"]["produced_heat"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["produced_heat"],-1)):,} kW'.replace(",", " ")
                     ))
         if results[selected_scenario_name]["dict_sum"]["produced_el"] > 1:
             fig.add_trace(
@@ -1318,7 +1318,6 @@ for scenario_name in SCENARIO_NAMES:
     dict_months_average = get_dict_months(dict_arrays, aggregation='average')
     dict_sum = get_key_values(dict_months_sum, aggregation='sum')
     dict_max = get_key_values(dict_months_max, aggregation='max')
-
     results[scenario_name] = {
         'dict_arrays' : dict_arrays,
         'dict_months_sum' : dict_months_sum,
