@@ -419,8 +419,8 @@ class EnergyAnalysis:
                     thermal_demand_for_calculation = heating_related_demand #+ heat_production
                     electric_demand_for_calculation = electric_related_demand
                     electric_demand = electric_related_demand + power_production
-                    spaceheating_demand = heating_related_demand + heat_production * 0.8 # antar at 80% varmeproduksjon er relatert til romoppvarming
-                    dhw_demand = heat_production * 0.2 # antar at 20% av varmeproduksjon er relatert til tappevann
+                    spaceheating_demand = heating_related_demand + heat_production * 0 # antar at 0% varmeproduksjon er relatert til romoppvarming
+                    dhw_demand = heat_production * 1.0 # antar at 100% av varmeproduksjon er relatert til tappevann
                 else:
                     spaceheating_series = self.PROFET_DATA[f"{row[self.PROFET_BUILDINGTYPE]}_{row[self.PROFET_BUILDINGSTANDARD]}_SPACEHEATING"]
                     spaceheating_demand = row[self.BUILDING_AREA] * np.array(spaceheating_series)

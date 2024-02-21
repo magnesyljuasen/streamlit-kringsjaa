@@ -647,7 +647,7 @@ def energy_effect_delivered_plot():
         st.write("**Energi** fra strømnettet")
         st.metric(label = "Totalt for byggene i valgt område", value = f'{int(round(energy,-3)):,} kWh/år'.replace(",", " "), label_visibility='visible')
         if boligenhet > 0:
-            st.metric(label = "Per boligenhet", value = f'{int(round(energy/boligenhet,-2)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+            st.metric(label = "Per utleieobjekt", value = f'{int(round(energy/boligenhet,-2)):,} kWh/år'.replace(",", " "), label_visibility='visible')
         if hybelenhet > 0:
             st.metric(label = "Per hybelenhet", value = f'{int(round(energy/hybelenhet,-1)):,} kWh/år'.replace(",", " "), label_visibility='visible')
         if arealenhet > 0:
@@ -657,7 +657,7 @@ def energy_effect_delivered_plot():
         st.write("**Makseffekt** fra strømnettet")
         st.metric(label = "Totalt for byggene i valgt område", value = f'{int(round(effect,-1)):,} kW'.replace(",", " "), label_visibility='visible')
         if boligenhet > 0:
-            st.metric(label = "Per boligenhet", value = f'{int((effect/boligenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+            st.metric(label = "Per utleieobjekt", value = f'{int((effect/boligenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
         if hybelenhet > 0:
             st.metric(label = "Per hybelenhet", value = f'{int((effect/hybelenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
         if arealenhet > 0:
@@ -776,7 +776,7 @@ def energy_effect_scenario_plot():
         st.write("**Energi** fra strømnettet")
         st.metric(label = "Per bygg", value = f'{int(round(energy,-3)):,} kWh/år'.replace(",", " "), label_visibility='visible')
         if boligenhet > 0:
-            st.metric(label = "Per boligenhet", value = f'{int(round(energy/boligenhet,-2)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+            st.metric(label = "Per utleieobjekt", value = f'{int(round(energy/boligenhet,-2)):,} kWh/år'.replace(",", " "), label_visibility='visible')
         if hybelenhet > 0:
             st.metric(label = "Per hybelenhet", value = f'{int(round(energy/hybelenhet,-1)):,} kWh/år'.replace(",", " "), label_visibility='visible')
         if arealenhet > 0:
@@ -786,7 +786,7 @@ def energy_effect_scenario_plot():
         effect = results[selected_scenario_name]["dict_max"]["grid"]
         st.metric(label = "Per bygg", value = f'{int(round(effect,-1)):,} kW'.replace(",", " "), label_visibility='visible')
         if boligenhet > 0:
-            st.metric(label = "Per boligenhet", value = f'{int((effect/boligenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+            st.metric(label = "Per utleieobjekt", value = f'{int((effect/boligenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
         if hybelenhet > 0:
             st.metric(label = "Per hybelenhet", value = f'{int((effect/hybelenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
         if arealenhet > 0:
@@ -889,6 +889,169 @@ def duration_curve_plot():
     fig = go.Figure(data=data, layout=layout)
     st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
     #st.info("Tips! Klikk på teksten i tegnforklaringen for å skru kurvene av/på.", icon="ℹ️")
+
+def show_more_building_statistics(df):
+    df["varme_areal"] = df["varme_fra_energisentral"] / df["bruksareal_totalt"]
+    df["strøm_areal"] = df["strøm"] / df["bruksareal_totalt"]
+    df.index = df["har_adresse"]
+    with st.expander("Bruksareal for hvert bygg", expanded=True):
+        traces = []
+        COLORS = [BASE_COLOR]
+        i = 0
+        for column in df[["bruksareal_totalt"]]:
+            traces.append(go.Bar(x=df.index, y=df[column], name=column, marker=dict(color=COLORS[i])))
+        layout = go.Layout()
+        fig = go.Figure(data=traces, layout=layout)
+        fig.update_layout(
+            legend=dict(
+                x=0,
+                y=1,
+                orientation='h',
+                xanchor='left',
+                yanchor='top',
+                title=None,
+                bgcolor='rgba(255, 255, 255, 0.5)',
+                font=dict(size=13)
+            ),
+            showlegend=False,
+            margin=dict(b=0, t=0),
+            yaxis=dict(title="Bruksareal (㎡)", side='left', showgrid=True, tickformat=",.0f", range=[0, df["bruksareal_totalt"].max()*1.1]),
+            xaxis=dict(title=None, showgrid=True, tickformat=",.0f"),
+            #barmode='relative',
+            #yaxis_ticksuffix=" kWh",
+            separators="* .*",
+            height=400
+            )
+        st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
+    
+    with st.expander("Varme og strøm per kvadratmeter", expanded=True):
+        traces = []
+        LINE_COLORS = [THERMAL_COLOR, ELECTRIC_COLOR]
+        i = 0
+        for i, column in enumerate(df[["varme_areal", "strøm_areal"]]):
+            if column == "varme_areal":
+                column_name = "Varme per kvadratmeter"
+            elif column == "strøm_areal":
+                column_name = "Strømforbruk per kvadratmeter"
+            traces.append(go.Bar(x=df.index, y=df[column], name=column_name, marker=dict(color=LINE_COLORS[i])))
+        layout = go.Layout()
+        fig = go.Figure(data=traces, layout=layout)
+        fig.update_layout(
+            legend=dict(
+                x=0,
+                y=1,
+                orientation='h',
+                xanchor='left',
+                yanchor='top',
+                title=None,
+                bgcolor='rgba(255, 255, 255, 0.5)',
+                font=dict(size=13)
+            ),
+            showlegend=True,
+            margin=dict(b=0, t=0),
+            yaxis=dict(title="Energi per kvadratmeter (kWh/㎡)", side='left', showgrid=True, tickformat=",.0f", range=[0, df["strøm_areal"].max()*1.1]),
+            xaxis=dict(title=None, showgrid=True, tickformat=",.0f"),
+            #barmode='relative',
+            #yaxis_ticksuffix=" kWh",
+            separators="* .*",
+            height=400
+            )
+        st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
+
+    with st.expander("Siste rehab", expanded=True):
+        traces = []
+        LINE_COLORS = [STAND_OUT_COLOR, ELECTRIC_COLOR]
+        i = 0
+        for i, column in enumerate(df[["siste_rehab"]]):
+            traces.append(go.Scatter(x=df.index, y=df[column], name=column_name, mode='markers', marker=dict(color=LINE_COLORS[i], size=14, symbol='x')))
+        layout = go.Layout()
+        fig = go.Figure(data=traces, layout=layout)
+        fig.update_layout(
+            legend=dict(
+                x=0,
+                y=1,
+                orientation='h',
+                xanchor='left',
+                yanchor='top',
+                title=None,
+                bgcolor='rgba(255, 255, 255, 0.5)',
+                font=dict(size=13)
+            ),
+            showlegend=None,
+            margin=dict(b=0, t=0),
+            yaxis=dict(title="År", side='left', showgrid=True, tickformat=".0f", range=[1969, 2026]),
+            xaxis=dict(title=None, showgrid=True, tickformat=",.0f"),
+            #barmode='relative',
+            #yaxis_ticksuffix=" kWh",
+            #separators="* .*",
+            height=400
+            )
+        st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
+
+def show_all_buildings(df, gdf):
+    addresses = list(gdf["har_adresse"])
+    with st.expander("Energibehov per år for hvert bygg", expanded=True):
+        df_thermal = df[df['ID'] == '_termisk_energibehov'].reset_index(drop = True).drop('ID', axis=1)
+        df_electric = df[df['ID'] == '_elektrisk_energibehov'].reset_index(drop = True).drop('ID', axis=1)
+        df_spaceheating = df[df['ID'] == '_romoppvarming_energibehov'].reset_index(drop = True).drop('ID', axis=1)
+        df_dhw = df[df['ID'] == '_tappevann_energibehov'].reset_index(drop = True).drop('ID', axis=1)
+        df_elspecific = df[df['ID'] == '_elspesifikt_energibehov'].reset_index(drop = True).drop('ID', axis=1)
+        df_grid = df[df['ID'] == '_nettutveksling_energi_liste'].reset_index(drop = True).drop('ID', axis=1)
+        df_total = df_spaceheating + df_dhw + df_elspecific
+        df_total_delivered = df_thermal + df_electric
+        df_produced_heat = df_spaceheating + df_dhw - df_thermal
+        df_produced_el = df_elspecific - df_electric
+        df_thermal_total = df_spaceheating + df_dhw
+        #--
+        df = pd.DataFrame({
+            'addresses' : addresses,
+            'Termisk energibehov' : df_thermal.sum().to_numpy(),
+            'Elektrisk energibehov' : df_electric.sum().to_numpy(),
+            'Produsert varme' : df_produced_heat.sum().to_numpy(),
+            'Produsert strøm' : df_produced_el.sum().to_numpy()
+
+        })
+        df.set_index('addresses', inplace=True)
+
+        traces = []
+        COLORS = [THERMAL_COLOR, ELECTRIC_COLOR, PRODUCED_HEAT_COLOR, PRODUCED_EL_COLOR]
+        i = 0
+        for column in df.columns:
+            traces.append(go.Bar(x=df.index, y=df[column], name=column, marker=dict(color=COLORS[i])))
+            i = i + 1
+
+        layout = go.Layout()
+        fig = go.Figure(data=traces, layout=layout)
+        fig.update_layout(
+            legend=dict(
+            x=0,
+            y=1,
+            orientation='h',
+            xanchor='left',
+            yanchor='top',
+            title=None,
+            bgcolor='rgba(255, 255, 255, 0.5)',
+            font=dict(size=13)
+            ),
+            showlegend=True,
+            margin=dict(b=0, t=0),
+            yaxis=dict(title="Energi (kWh/år)", side='left', showgrid=True, tickformat=",.0f", range=[0, df["Termisk energibehov"].max()*1.1]),
+            xaxis=dict(title=None, showgrid=True, tickformat=",.0f"),
+            #barmode='relative',
+            #yaxis_ticksuffix=" kWh",
+            separators="* .*",
+            height=400
+            )
+        st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
+#        st.dataframe(
+#            data=df,
+#            column_config={
+#                "Termisk energibehov" : st.column_config.NumberColumn("Termisk energibehov (kWh/år)"),
+#                "Elektrisk energibehov" : st.column_config.NumberColumn("Elektrisk energibehov (kWh/år)"),
+#                "Produsert varme" : st.column_config.NumberColumn("Produsert varme til tappevann (kWh/år)"),
+#                "Produsert strøm" : st.column_config.NumberColumn("Produsert strøm fra solceller (kWh/år)"),
+#            }, 
+#            use_container_width=True)
 
 start_time = time.time()
 streamlit_settings(title="Energianalyse Kringsjå", icon="h")
@@ -1031,12 +1194,15 @@ for scenario_name in SCENARIO_NAMES:
 ######################################################################
 if selected_scenario_name == "Referansesituasjon":
     energy_effect_delivered_plot()
+    show_all_buildings(df = df_hourly_data, gdf = filtered_gdf)
+    show_more_building_statistics(df = filtered_gdf)
 else:
     COLUMN_1, COLUMN_2 = st.columns([1, 1])    
     with COLUMN_1:
         energy_effect_delivered_plot()
     with COLUMN_2:
         energy_effect_scenario_plot()
+
 download_data()
 my_bar.progress(int(i + (100 - i)/2), text = "Lager figurer...") 
 ######################################################################
