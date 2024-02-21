@@ -1079,10 +1079,10 @@ def show_all_buildings(df, gdf):
         #--
         df = pd.DataFrame({
             'addresses' : addresses,
-            'Termisk energibehov' : df_thermal.sum().to_numpy(),
+            'Termisk energibehov som er dekket av strøm' : df_thermal.sum().to_numpy(),
             'Elektrisk energibehov' : df_electric.sum().to_numpy(),
-            'Produsert varme' : df_produced_heat.sum().to_numpy(),
-            'Produsert strøm' : df_produced_el.sum().to_numpy()
+            'Varmeandel fra energisentral (grunnvarme)' : df_produced_heat.sum().to_numpy(),
+            'Produsert strøm fra solceller' : df_produced_el.sum().to_numpy()
 
         })
         df.set_index('addresses', inplace=True)
@@ -1090,12 +1090,11 @@ def show_all_buildings(df, gdf):
             df = df.div(square_meters, axis=0)
 
         traces = []
-        COLORS = [THERMAL_COLOR, ELECTRIC_COLOR, PRODUCED_HEAT_COLOR, PRODUCED_EL_COLOR]
+        COLORS = [THERMAL_COLOR, PRODUCED_HEAT_COLOR, ELECTRIC_COLOR, PRODUCED_EL_COLOR]
         i = 0
-        for column in df.columns:
+        for column in df[["Termisk energibehov som er dekket av strøm", "Varmeandel fra energisentral (grunnvarme)"]]:
             traces.append(go.Bar(x=df.index, y=df[column], name=column, marker=dict(color=COLORS[i])))
             i = i + 1
-
         layout = go.Layout()
         fig = go.Figure(data=traces, layout=layout)
         fig.update_layout(
@@ -1111,16 +1110,63 @@ def show_all_buildings(df, gdf):
             ),
             showlegend=True,
             margin=dict(b=0, t=0),
-            yaxis=dict(title="Energi (kWh/år)", side='left', showgrid=True, tickformat=",.0f", range=[0, df["Termisk energibehov"].max()*1.1]),
+            yaxis=dict(title="Energi (kWh/år)", side='left', showgrid=True, tickformat=",.0f", range=[0, (df["Termisk energibehov som er dekket av strøm"] + df["Varmeandel fra energisentral (grunnvarme)"]).max()*1.1]),
             xaxis=dict(title=None, showgrid=True, tickformat=",.0f"),
-            #barmode='relative',
+            barmode='stack',
             #yaxis_ticksuffix=" kWh",
             separators="* .*",
             height=400
             )
         if per_square_meter:
             fig.update_layout(
-                yaxis=dict(title="Energi (kWh/m²∙år)", side='left', showgrid=True, tickformat=",.0f", range=[0, df["Termisk energibehov"].max()*1.1]),
+                yaxis=dict(title="Energi (kWh/m²∙år)", side='left', showgrid=True, tickformat=",.0f", range=[0, (df["Termisk energibehov som er dekket av strøm"] + df["Varmeandel fra energisentral (grunnvarme)"]).max()*1.1]),
+            )
+        fig.update_layout(
+            xaxis=dict(
+                titlefont_size=20,  # Font size for x-axis label
+                tickfont_size=16,   # Font size for x-axis ticks
+            ),
+            yaxis=dict(
+                titlefont_size=20,  # Font size for y-axis label
+                tickfont_size=16,   # Font size for y-axis ticks
+            ),
+            font=dict(
+                size=18            # General font size for annotations, legends, etc.
+            )
+        )
+        st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
+        #--
+        traces = []
+        COLORS = [ELECTRIC_COLOR, PRODUCED_EL_COLOR]
+        i = 0
+        for column in df[["Elektrisk energibehov", "Produsert strøm fra solceller"]]:
+            traces.append(go.Bar(x=df.index, y=df[column], name=column, marker=dict(color=COLORS[i])))
+            i = i + 1
+        layout = go.Layout()
+        fig = go.Figure(data=traces, layout=layout)
+        fig.update_layout(
+            legend=dict(
+            x=0,
+            y=1,
+            orientation='h',
+            xanchor='left',
+            yanchor='top',
+            title=None,
+            bgcolor='rgba(255, 255, 255, 0.5)',
+            font=dict(size=13)
+            ),
+            showlegend=True,
+            margin=dict(b=0, t=0),
+            yaxis=dict(title="Energi (kWh/år)", side='left', showgrid=True, tickformat=",.0f", range=[0, (df["Termisk energibehov som er dekket av strøm"] + df["Varmeandel fra energisentral (grunnvarme)"]).max()*1.1]),
+            xaxis=dict(title=None, showgrid=True, tickformat=",.0f"),
+            barmode='stack',
+            #yaxis_ticksuffix=" kWh",
+            separators="* .*",
+            height=400
+            )
+        if per_square_meter:
+            fig.update_layout(
+                yaxis=dict(title="Energi (kWh/m²∙år)", side='left', showgrid=True, tickformat=",.0f", range=[0, (df["Termisk energibehov som er dekket av strøm"] + df["Varmeandel fra energisentral (grunnvarme)"]).max()*1.1]),
             )
         fig.update_layout(
             xaxis=dict(
