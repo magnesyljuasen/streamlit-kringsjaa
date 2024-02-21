@@ -230,7 +230,7 @@ def create_map(df_position):
         property_value = feature['properties']["Sol"]
         #property_value = feature['properties']['Romoppvarming']
         if property_value == 'Solfanger':
-            return {'fillColor': 'orange', 'fillOpacity': 0.75, 'color': 'black', 'weight': 1}
+            return {'fillColor': 'gray', 'fillOpacity': 0, 'color': 'orange', 'weight': 3}
         else:
             return {'fillColor': 'gray', 'fillOpacity': 0, 'color': 'black', 'weight': 0}
 
@@ -246,7 +246,8 @@ def create_map(df_position):
         property_value = feature['properties']["Sol"]
         #property_value = feature['properties']['Romoppvarming']
         if property_value == 'Solceller':
-            return {'fillColor': 'yellow', 'fillOpacity': 0.75, 'color': 'black', 'weight': 1}
+            #return {'fillColor': 'yellow', 'fillOpacity': 1, 'color': 'yellow', 'weight': 4}
+            return {'fillColor': 'gray', 'fillOpacity': 0, 'color': 'yellow', 'weight': 3}
         else:
             return {'fillColor': 'gray', 'fillOpacity': 0, 'color': 'black', 'weight': 0}
 
@@ -295,19 +296,27 @@ def create_map(df_position):
         show = False,
         name="Varmtvannstrase",
         ).add_to(folium_map)
-    folium.GeoJson(
-        "src/geojson/VARMESENTRALER.geojson",
-        style_function=lambda feature: {"color": "#0000FF", "fillOpacity": 1} if feature["properties"]["Navn"] == "Varmesentral 1" else {"color": "#0096FF", "fillOpacity": 1},
-        control=True,
-        show = False,
-        name="Varmesentraler",
-        marker=folium.Circle(
-            radius=14,
-            fill=True,
-            fill_opacity=0.6, 
-            weight=1)
-            ).add_to(folium_map)
-        
+    
+    # Add GeoJSON layer with custom styling
+    feature_group = folium.FeatureGroup(name="Varmesentraler", control=True, show=False)
+    geojson_layer = folium.GeoJson("src/geojson/VARMESENTRALER.geojson",)
+
+    # Add markers with custom icons for each feature
+    for feature in geojson_layer.data['features']:
+        if feature['properties']['Navn'] == 'Varmesentral 1':
+            beautify_icon = folium.plugins.BeautifyIcon(number=1, border_color='#000', text_color='#0000FF', background_color='#FFF', icon_shape='marker')
+            marker = folium.Marker(location=feature['geometry']['coordinates'][::-1], icon=beautify_icon)
+            feature_group.add_child(marker)
+        if feature['properties']['Navn'] == 'Varmesentral 2':
+            beautify_icon = folium.plugins.BeautifyIcon(number=2, border_color='#000', text_color='#0096FF', background_color='#FFF', icon_shape='marker')
+            marker = folium.Marker(location=feature['geometry']['coordinates'][::-1], icon=beautify_icon)
+            feature_group.add_child(marker)
+        if feature['properties']['Navn'] == 'Varmesentral 3':
+            beautify_icon = folium.plugins.BeautifyIcon(number=3, border_color='#000', text_color='red', background_color='#FFF', icon_shape='marker')
+            marker = folium.Marker(location=feature['geometry']['coordinates'][::-1], icon=beautify_icon)
+            feature_group.add_child(marker)
+    
+    folium_map.add_child(feature_group)
     add_wms_layer_to_map(
         url = "https://geo.ngu.no/mapserver/LosmasserWMS2?request=GetCapabilities&service=WMS",
         layer = "Losmasse_flate",
@@ -553,115 +562,128 @@ def energy_effect_plot():
     st.markdown(download_link(df = df, filename = "data.csv"), unsafe_allow_html=True)
 
 def energy_effect_delivered_plot():
-    st.write("**Referansesituasjon**")
-    HOURS = np.arange(0, 8760)
-    fig = go.Figure()
-#    fig.add_trace(
-#        go.Scatter(
-#            x=HOURS,
-#            y=results[selected_scenario_name]["dict_arrays"]["total_delivered"],
-#            hoverinfo='skip',
-#            stackgroup="one",
-#            visible = 'legendonly',
-#            fill="tonexty",
-#            line=dict(width=0, color=TOTAL_COLOR),
-#            name=f'Fra strømnettet (totalt):<br>{int(round(results[selected_scenario_name]["dict_sum"]["total_delivered"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["total_delivered"],-1)):,} kW'.replace(",", " ")
-#            ))
-    fig.add_trace(
-        go.Scatter(
-            x=HOURS,
-            y=results[selected_scenario_name]["dict_arrays"]["electric"],
-            hoverinfo='skip',
-            stackgroup="one",
-            fill="tonexty",
-            line=dict(width=0, color=ELECTRIC_COLOR),
-            name=f'Elspesifikt (behov fra strømnettet):<br>{int(round(results[selected_scenario_name]["dict_sum"]["electric"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["electric"],-1)):,} kW'.replace(",", " ")
-            ))
-    
-    fig.add_trace(
-        go.Scatter(
-            x=HOURS,
-            y=results[selected_scenario_name]["dict_arrays"]["thermal"],
-            hoverinfo='skip',
-            stackgroup="one",
-            fill="tonexty",
-            line=dict(width=0, color=THERMAL_COLOR),
-            name=f'Termisk (behov fra strømnettet):<br>{int(round(results[selected_scenario_name]["dict_sum"]["thermal"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["thermal"],-1)):,} kW'.replace(",", " ")
-            ))
-    if results[selected_scenario_name]["dict_sum"]["produced_heat"] > 1:
+    with st.expander("Energi og effekt for området (**Referansesituasjon**)", expanded=True):
+        HOURS = np.arange(0, 8760)
+        fig = go.Figure()
+    #    fig.add_trace(
+    #        go.Scatter(
+    #            x=HOURS,
+    #            y=results[selected_scenario_name]["dict_arrays"]["total_delivered"],
+    #            hoverinfo='skip',
+    #            stackgroup="one",
+    #            visible = 'legendonly',
+    #            fill="tonexty",
+    #            line=dict(width=0, color=TOTAL_COLOR),
+    #            name=f'Fra strømnettet (totalt):<br>{int(round(results[selected_scenario_name]["dict_sum"]["total_delivered"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["total_delivered"],-1)):,} kW'.replace(",", " ")
+    #            ))
         fig.add_trace(
             go.Scatter(
                 x=HOURS,
-                y=results[selected_scenario_name]["dict_arrays"]["produced_heat"],
+                y=results[selected_scenario_name]["dict_arrays"]["electric"],
                 hoverinfo='skip',
                 stackgroup="one",
                 fill="tonexty",
-                line=dict(width=0, color=PRODUCED_HEAT_COLOR),
-                name=f'Tappevannsproduksjon:<br>{int(round(results[selected_scenario_name]["dict_sum"]["produced_heat"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["produced_heat"],-1)):,} kW'.replace(",", " ")
+                line=dict(width=0, color=ELECTRIC_COLOR),
+                name=f'Elspesifikt (behov fra strømnettet):<br>{int(round(results[selected_scenario_name]["dict_sum"]["electric"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["electric"],-1)):,} kW'.replace(",", " ")
                 ))
-    if results[selected_scenario_name]["dict_sum"]["produced_el"] > 1:
+        
         fig.add_trace(
             go.Scatter(
                 x=HOURS,
-                y=results[selected_scenario_name]["dict_arrays"]["produced_el"],
+                y=results[selected_scenario_name]["dict_arrays"]["thermal"],
                 hoverinfo='skip',
                 stackgroup="one",
                 fill="tonexty",
-                line=dict(width=0, color=PRODUCED_EL_COLOR),
-                name=f'Strøm fra solceller:<br>{int(round(results[selected_scenario_name]["dict_sum"]["produced_el"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["produced_el"],-1)):,} kW'.replace(",", " ")
+                line=dict(width=0, color=THERMAL_COLOR),
+                name=f'Termisk (behov fra strømnettet):<br>{int(round(results[selected_scenario_name]["dict_sum"]["thermal"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["thermal"],-1)):,} kW'.replace(",", " ")
                 ))
-    fig.update_layout(
-        legend=dict(
-            x=0,
-            y=1,
-            orientation='h',
-            xanchor='left',
-            yanchor='top',
-            title=None,
-            bgcolor='rgba(255, 255, 255, 0.5)',
-            font=dict(size=13)
-        ),
-        showlegend=True,
-        margin=dict(b=0, t=0),
-        barmode='relative',
-        #yaxis_ticksuffix=" kW",
-        separators="* .*",
-        height=300,
-        yaxis=dict(
-            title="Effekt (kW)",
-            side='left', 
-            showgrid=True, 
-            tickformat=",.0f", 
-            range=[0, results[selected_scenario_name]["dict_max"]["total"] * 1.5]),
-        xaxis = dict(
-            tickmode = 'array', 
-            tickvals = [0, 24 * (31), 24 * (31 + 28), 24 * (31 + 28 + 31), 24 * (31 + 28 + 31 + 30), 24 * (31 + 28 + 31 + 30 + 31), 24 * (31 + 28 + 31 + 30 + 31 + 30), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30 + 31)], 
-            ticktext = ["1.jan", "", "1.mar", "", "1.mai", "", "1.jul", "", "1.sep", "", "1.nov", "", "1.jan"],
-            title=None,
-            showgrid=True)
+        if results[selected_scenario_name]["dict_sum"]["produced_heat"] > 1:
+            fig.add_trace(
+                go.Scatter(
+                    x=HOURS,
+                    y=results[selected_scenario_name]["dict_arrays"]["produced_heat"],
+                    hoverinfo='skip',
+                    stackgroup="one",
+                    fill="tonexty",
+                    line=dict(width=0, color=PRODUCED_HEAT_COLOR),
+                    name=f'Tappevannsproduksjon:<br>{int(round(results[selected_scenario_name]["dict_sum"]["produced_heat"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["produced_heat"],-1)):,} kW'.replace(",", " ")
+                    ))
+        if results[selected_scenario_name]["dict_sum"]["produced_el"] > 1:
+            fig.add_trace(
+                go.Scatter(
+                    x=HOURS,
+                    y=results[selected_scenario_name]["dict_arrays"]["produced_el"],
+                    hoverinfo='skip',
+                    stackgroup="one",
+                    fill="tonexty",
+                    line=dict(width=0, color=PRODUCED_EL_COLOR),
+                    name=f'Strøm fra solceller:<br>{int(round(results[selected_scenario_name]["dict_sum"]["produced_el"],-3)):,} kWh/år<br>{int(round(results[selected_scenario_name]["dict_max"]["produced_el"],-1)):,} kW'.replace(",", " ")
+                    ))
+        fig.update_layout(
+            legend=dict(
+                x=0,
+                y=1,
+                orientation='h',
+                xanchor='left',
+                yanchor='top',
+                title=None,
+                bgcolor='rgba(255, 255, 255, 0.5)',
+                font=dict(size=13)
+            ),
+            showlegend=True,
+            margin=dict(b=0, t=0),
+            barmode='relative',
+            #yaxis_ticksuffix=" kW",
+            separators="* .*",
+            height=300,
+            yaxis=dict(
+                title="Effekt (kW)",
+                side='left', 
+                showgrid=True, 
+                tickformat=",.0f", 
+                range=[0, results[selected_scenario_name]["dict_max"]["total"] * 1.5]),
+            xaxis = dict(
+                tickmode = 'array', 
+                tickvals = [0, 24 * (31), 24 * (31 + 28), 24 * (31 + 28 + 31), 24 * (31 + 28 + 31 + 30), 24 * (31 + 28 + 31 + 30 + 31), 24 * (31 + 28 + 31 + 30 + 31 + 30), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30), 24 * (31 + 28 + 31 + 30 + 31 + 30 + 31 + 31 + 30 + 31 + 30 + 31)], 
+                ticktext = ["1.jan", "", "1.mar", "", "1.mai", "", "1.jul", "", "1.sep", "", "1.nov", "", "1.jan"],
+                title=None,
+                showgrid=True)
+            )
+        fig.update_layout(
+            xaxis=dict(
+                titlefont_size=20,  # Font size for x-axis label
+                tickfont_size=16,   # Font size for x-axis ticks
+            ),
+            yaxis=dict(
+                titlefont_size=20,  # Font size for y-axis label
+                tickfont_size=16,   # Font size for y-axis ticks
+            ),
+            font=dict(
+                size=18            # General font size for annotations, legends, etc.
+            )
         )
-    st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
-    c1, c2 = st.columns(2)
-    with c1:
-        energy = results[selected_scenario_name]["dict_sum"]["total_delivered"]
-        st.write("**Energi** fra strømnettet")
-        st.metric(label = "Totalt for byggene i valgt område", value = f'{int(round(energy,-3)):,} kWh/år'.replace(",", " "), label_visibility='visible')
-        if boligenhet > 0:
-            st.metric(label = "Per utleieobjekt", value = f'{int(round(energy/boligenhet,-2)):,} kWh/år'.replace(",", " "), label_visibility='visible')
-        if hybelenhet > 0:
-            st.metric(label = "Per hybelenhet", value = f'{int(round(energy/hybelenhet,-1)):,} kWh/år'.replace(",", " "), label_visibility='visible')
-        if arealenhet > 0:
-            st.metric(label = "Per arealenhet (m²)", value = f'{int(round(energy/arealenhet,0)):,} kWh/år'.replace(",", " "), label_visibility='visible')
-    with c2:
-        effect = results[selected_scenario_name]["dict_max"]["total_delivered"]
-        st.write("**Makseffekt** fra strømnettet")
-        st.metric(label = "Totalt for byggene i valgt område", value = f'{int(round(effect,-1)):,} kW'.replace(",", " "), label_visibility='visible')
-        if boligenhet > 0:
-            st.metric(label = "Per utleieobjekt", value = f'{int((effect/boligenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
-        if hybelenhet > 0:
-            st.metric(label = "Per hybelenhet", value = f'{int((effect/hybelenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
-        if arealenhet > 0:
-            st.metric(label = "Per arealenhet (m²)", value = f'{int((effect/arealenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+        st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
+        c1, c2 = st.columns(2)
+        with c1:
+            energy = results[selected_scenario_name]["dict_sum"]["total_delivered"]
+            st.write("**Energi** fra strømnettet")
+            st.metric(label = "Totalt for byggene i valgt område", value = f'{int(round(energy,-3)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+            if boligenhet > 0:
+                st.metric(label = "Per utleieobjekt", value = f'{int(round(energy/boligenhet,-2)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+            if hybelenhet > 0:
+                st.metric(label = "Per hybelenhet", value = f'{int(round(energy/hybelenhet,-1)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+            if arealenhet > 0:
+                st.metric(label = "Per arealenhet (m²)", value = f'{int(round(energy/arealenhet,0)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+        with c2:
+            effect = results[selected_scenario_name]["dict_max"]["total_delivered"]
+            st.write("**Makseffekt** fra strømnettet")
+            st.metric(label = "Totalt for byggene i valgt område", value = f'{int(round(effect,-1)):,} kW'.replace(",", " "), label_visibility='visible')
+            if boligenhet > 0:
+                st.metric(label = "Per utleieobjekt", value = f'{int((effect/boligenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+            if hybelenhet > 0:
+                st.metric(label = "Per hybelenhet", value = f'{int((effect/hybelenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+            if arealenhet > 0:
+                st.metric(label = "Per arealenhet (m²)", value = f'{int((effect/arealenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
     
 def download_data():
     with st.expander("Mer informasjon"):
@@ -767,6 +789,19 @@ def energy_effect_scenario_plot():
             title=None,
             showgrid=True)
         )
+    fig.update_layout(
+            xaxis=dict(
+                titlefont_size=20,  # Font size for x-axis label
+                tickfont_size=16,   # Font size for x-axis ticks
+            ),
+            yaxis=dict(
+                titlefont_size=20,  # Font size for y-axis label
+                tickfont_size=16,   # Font size for y-axis ticks
+            ),
+            font=dict(
+                size=18            # General font size for annotations, legends, etc.
+            )
+        )
     st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
     c1, c2 = st.columns(2)
     energy_reduction = int(round(((results[selected_scenario_name]["dict_sum"]["total_delivered"] - results[selected_scenario_name]["dict_sum"]["grid"])/results[selected_scenario_name]["dict_sum"]["total_delivered"])*100,1))
@@ -840,6 +875,19 @@ def energy_effect_comparison_plot():
         separators="* .*",
         height=400
         )
+    fig.update_layout(
+            xaxis=dict(
+                titlefont_size=20,  # Font size for x-axis label
+                tickfont_size=16,   # Font size for x-axis ticks
+            ),
+            yaxis=dict(
+                titlefont_size=20,  # Font size for y-axis label
+                tickfont_size=16,   # Font size for y-axis ticks
+            ),
+            font=dict(
+                size=18            # General font size for annotations, legends, etc.
+            )
+        )
     st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
     #st.markdown(download_link(df = df, filename = "data.csv"), unsafe_allow_html=True)
 
@@ -865,6 +913,19 @@ def district_heating_counter(current_value):
         margin=dict(l=50, r=50, t=50, b=50),  # Set margins to zero
         height=300,  # Adjust the height of the plot
     )
+    fig.update_layout(
+            xaxis=dict(
+                titlefont_size=20,  # Font size for x-axis label
+                tickfont_size=16,   # Font size for x-axis ticks
+            ),
+            yaxis=dict(
+                titlefont_size=20,  # Font size for y-axis label
+                tickfont_size=16,   # Font size for y-axis ticks
+            ),
+            font=dict(
+                size=18            # General font size for annotations, legends, etc.
+            )
+        )
     st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
     
         
@@ -887,6 +948,19 @@ def duration_curve_plot():
         yaxis_ticksuffix=" kW",
         xaxis_ticksuffix=" timer",)
     fig = go.Figure(data=data, layout=layout)
+    fig.update_layout(
+            xaxis=dict(
+                titlefont_size=20,  # Font size for x-axis label
+                tickfont_size=16,   # Font size for x-axis ticks
+            ),
+            yaxis=dict(
+                titlefont_size=20,  # Font size for y-axis label
+                tickfont_size=16,   # Font size for y-axis ticks
+            ),
+            font=dict(
+                size=18            # General font size for annotations, legends, etc.
+            )
+        )
     st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
     #st.info("Tips! Klikk på teksten i tegnforklaringen for å skru kurvene av/på.", icon="ℹ️")
 
@@ -927,53 +1001,27 @@ def show_more_building_statistics(df):
             separators="* .*",
             height=400
             )
+        fig.update_layout(
+            xaxis=dict(
+                titlefont_size=20,  # Font size for x-axis label
+                tickfont_size=16,   # Font size for x-axis ticks
+            ),
+            yaxis=dict(
+                titlefont_size=20,  # Font size for y-axis label
+                tickfont_size=16,   # Font size for y-axis ticks
+            ),
+            font=dict(
+                size=18            # General font size for annotations, legends, etc.
+            )
+        )
         st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
     
-    with st.expander("Varme og strøm per kvadratmeter", expanded=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            st.metric("Gj.snittlig produsert varme per kvadratmeter", value=f"{int(df['varme_areal'].mean()):,} kWh/m²∙år".replace(",", " "))
-        with c2:
-            st.metric("Gj.snittlig forbrukt strøm per kvadratmeter", value=f"{int(df['strøm_areal'].mean()):,} kWh/m²∙år".replace(",", " "))
-        traces = []
-        LINE_COLORS = [THERMAL_COLOR, ELECTRIC_COLOR]
-        i = 0
-        for i, column in enumerate(df[["varme_areal", "strøm_areal"]]):
-            if column == "varme_areal":
-                column_name = "Varmeproduksjon per kvadratmeter"
-            elif column == "strøm_areal":
-                column_name = "Strømforbruk per kvadratmeter"
-            traces.append(go.Bar(x=df.index, y=df[column], name=column_name, marker=dict(color=LINE_COLORS[i])))
-        layout = go.Layout()
-        fig = go.Figure(data=traces, layout=layout)
-        fig.update_layout(
-            legend=dict(
-                x=0,
-                y=1,
-                orientation='h',
-                xanchor='left',
-                yanchor='top',
-                title=None,
-                bgcolor='rgba(255, 255, 255, 0.5)',
-                font=dict(size=13)
-            ),
-            showlegend=True,
-            margin=dict(b=0, t=0),
-            yaxis=dict(title="Årlig energi per kvadratmeter (kWh/m²∙år)", side='left', showgrid=True, tickformat=",.0f", range=[0, df["strøm_areal"].max()*1.1]),
-            xaxis=dict(title=None, showgrid=True, tickformat=",.0f"),
-            #barmode='relative',
-            #yaxis_ticksuffix=" kWh",
-            separators="* .*",
-            height=400
-            )
-        st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
-
     with st.expander("Siste rehab", expanded=True):
         traces = []
         LINE_COLORS = [STAND_OUT_COLOR, ELECTRIC_COLOR]
         i = 0
         for i, column in enumerate(df[["siste_rehab"]]):
-            traces.append(go.Scatter(x=df.index, y=df[column], name=column_name, mode='markers', marker=dict(color=LINE_COLORS[i], size=14, symbol='x')))
+            traces.append(go.Scatter(x=df.index, y=df[column], name=column, mode='markers', marker=dict(color=LINE_COLORS[i], size=14, symbol='x')))
         layout = go.Layout()
         fig = go.Figure(data=traces, layout=layout)
         fig.update_layout(
@@ -996,11 +1044,27 @@ def show_more_building_statistics(df):
             #separators="* .*",
             height=400
             )
+        fig.update_layout(
+            xaxis=dict(
+                titlefont_size=20,  # Font size for x-axis label
+                tickfont_size=16,   # Font size for x-axis ticks
+            ),
+            yaxis=dict(
+                titlefont_size=20,  # Font size for y-axis label
+                tickfont_size=16,   # Font size for y-axis ticks
+            ),
+            font=dict(
+                size=18            # General font size for annotations, legends, etc.
+            )
+        )
         st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
 
 def show_all_buildings(df, gdf):
+    
     addresses = list(gdf["har_adresse"])
+    square_meters = list(gdf["bruksareal_totalt"])
     with st.expander("Energibehov per år for hvert bygg", expanded=True):
+        per_square_meter = st.toggle("Skalert per kvadratmeter?")
         df_thermal = df[df['ID'] == '_termisk_energibehov'].reset_index(drop = True).drop('ID', axis=1)
         df_electric = df[df['ID'] == '_elektrisk_energibehov'].reset_index(drop = True).drop('ID', axis=1)
         df_spaceheating = df[df['ID'] == '_romoppvarming_energibehov'].reset_index(drop = True).drop('ID', axis=1)
@@ -1022,6 +1086,8 @@ def show_all_buildings(df, gdf):
 
         })
         df.set_index('addresses', inplace=True)
+        if per_square_meter:
+            df = df.div(square_meters, axis=0)
 
         traces = []
         COLORS = [THERMAL_COLOR, ELECTRIC_COLOR, PRODUCED_HEAT_COLOR, PRODUCED_EL_COLOR]
@@ -1052,6 +1118,23 @@ def show_all_buildings(df, gdf):
             separators="* .*",
             height=400
             )
+        if per_square_meter:
+            fig.update_layout(
+                yaxis=dict(title="Energi (kWh/m²∙år)", side='left', showgrid=True, tickformat=",.0f", range=[0, df["Termisk energibehov"].max()*1.1]),
+            )
+        fig.update_layout(
+            xaxis=dict(
+                titlefont_size=20,  # Font size for x-axis label
+                tickfont_size=16,   # Font size for x-axis ticks
+            ),
+            yaxis=dict(
+                titlefont_size=20,  # Font size for y-axis label
+                tickfont_size=16,   # Font size for y-axis ticks
+            ),
+            font=dict(
+                size=18            # General font size for annotations, legends, etc.
+            )
+        )
         st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
 #        st.dataframe(
 #            data=df,
@@ -1062,6 +1145,7 @@ def show_all_buildings(df, gdf):
 #                "Produsert strøm" : st.column_config.NumberColumn("Produsert strøm fra solceller (kWh/år)"),
 #            }, 
 #            use_container_width=True)
+   
 
 start_time = time.time()
 streamlit_settings(title="Energianalyse Kringsjå", icon="h")
