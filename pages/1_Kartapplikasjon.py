@@ -651,7 +651,7 @@ def energy_effect_delivered_plot():
         if hybelenhet > 0:
             st.metric(label = "Per hybelenhet", value = f'{int(round(energy/hybelenhet,-1)):,} kWh/år'.replace(",", " "), label_visibility='visible')
         if arealenhet > 0:
-            st.metric(label = "Per arealenhet (㎡)", value = f'{int(round(energy/arealenhet,0)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+            st.metric(label = "Per arealenhet (m²)", value = f'{int(round(energy/arealenhet,0)):,} kWh/år'.replace(",", " "), label_visibility='visible')
     with c2:
         effect = results[selected_scenario_name]["dict_max"]["total_delivered"]
         st.write("**Makseffekt** fra strømnettet")
@@ -661,7 +661,7 @@ def energy_effect_delivered_plot():
         if hybelenhet > 0:
             st.metric(label = "Per hybelenhet", value = f'{int((effect/hybelenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
         if arealenhet > 0:
-            st.metric(label = "Per arealenhet (㎡)", value = f'{int((effect/arealenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+            st.metric(label = "Per arealenhet (m²)", value = f'{int((effect/arealenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
     
 def download_data():
     with st.expander("Mer informasjon"):
@@ -780,7 +780,7 @@ def energy_effect_scenario_plot():
         if hybelenhet > 0:
             st.metric(label = "Per hybelenhet", value = f'{int(round(energy/hybelenhet,-1)):,} kWh/år'.replace(",", " "), label_visibility='visible')
         if arealenhet > 0:
-            st.metric(label = "Per arealenhet (㎡)", value = f'{int(round(energy/arealenhet,0)):,} kWh/år'.replace(",", " "), label_visibility='visible')
+            st.metric(label = "Per arealenhet (m²)", value = f'{int(round(energy/arealenhet,0)):,} kWh/år'.replace(",", " "), label_visibility='visible')
     with c2:
         st.write("**Makseffekt** fra strømnettet")
         effect = results[selected_scenario_name]["dict_max"]["grid"]
@@ -790,7 +790,7 @@ def energy_effect_scenario_plot():
         if hybelenhet > 0:
             st.metric(label = "Per hybelenhet", value = f'{int((effect/hybelenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
         if arealenhet > 0:
-            st.metric(label = "Per arealenhet (㎡)", value = f'{int((effect/arealenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
+            st.metric(label = "Per arealenhet (m²)", value = f'{int((effect/arealenhet)*1000):,} W'.replace(",", " "), label_visibility='visible')
 
 def energy_effect_comparison_plot():
     st.markdown(f"<span style='color:{AFTER_COLOR}'>Fremtidig behov fra strømnettet for alle scenariene (kWh/år og kW)".replace(",", " "), unsafe_allow_html=True)
@@ -895,6 +895,11 @@ def show_more_building_statistics(df):
     df["strøm_areal"] = df["strøm"] / df["bruksareal_totalt"]
     df.index = df["har_adresse"]
     with st.expander("Bruksareal for hvert bygg", expanded=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            st.metric("Totalt bruksareal", value=f"{df['bruksareal_totalt'].sum():,} m²".replace(",", " "))
+        with c2:
+            st.metric("Gj.snittlig bruksareal", value=f"{int(df['bruksareal_totalt'].mean()):,} m²".replace(",", " "))
         traces = []
         COLORS = [BASE_COLOR]
         i = 0
@@ -915,7 +920,7 @@ def show_more_building_statistics(df):
             ),
             showlegend=False,
             margin=dict(b=0, t=0),
-            yaxis=dict(title="Bruksareal (㎡)", side='left', showgrid=True, tickformat=",.0f", range=[0, df["bruksareal_totalt"].max()*1.1]),
+            yaxis=dict(title="Bruksareal (m²)", side='left', showgrid=True, tickformat=",.0f", range=[0, df["bruksareal_totalt"].max()*1.1]),
             xaxis=dict(title=None, showgrid=True, tickformat=",.0f"),
             #barmode='relative',
             #yaxis_ticksuffix=" kWh",
@@ -925,12 +930,17 @@ def show_more_building_statistics(df):
         st.plotly_chart(fig, use_container_width=True, config = {'displayModeBar': True, 'staticPlot': True})
     
     with st.expander("Varme og strøm per kvadratmeter", expanded=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            st.metric("Gj.snittlig produsert varme per kvadratmeter", value=f"{int(df['varme_areal'].mean()):,} kWh/m²∙år".replace(",", " "))
+        with c2:
+            st.metric("Gj.snittlig forbrukt strøm per kvadratmeter", value=f"{int(df['strøm_areal'].mean()):,} kWh/m²∙år".replace(",", " "))
         traces = []
         LINE_COLORS = [THERMAL_COLOR, ELECTRIC_COLOR]
         i = 0
         for i, column in enumerate(df[["varme_areal", "strøm_areal"]]):
             if column == "varme_areal":
-                column_name = "Varme per kvadratmeter"
+                column_name = "Varmeproduksjon per kvadratmeter"
             elif column == "strøm_areal":
                 column_name = "Strømforbruk per kvadratmeter"
             traces.append(go.Bar(x=df.index, y=df[column], name=column_name, marker=dict(color=LINE_COLORS[i])))
@@ -949,7 +959,7 @@ def show_more_building_statistics(df):
             ),
             showlegend=True,
             margin=dict(b=0, t=0),
-            yaxis=dict(title="Energi per kvadratmeter (kWh/㎡)", side='left', showgrid=True, tickformat=",.0f", range=[0, df["strøm_areal"].max()*1.1]),
+            yaxis=dict(title="Årlig energi per kvadratmeter (kWh/m²∙år)", side='left', showgrid=True, tickformat=",.0f", range=[0, df["strøm_areal"].max()*1.1]),
             xaxis=dict(title=None, showgrid=True, tickformat=",.0f"),
             #barmode='relative',
             #yaxis_ticksuffix=" kWh",
