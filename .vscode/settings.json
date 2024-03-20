@@ -1,0 +1,4 @@
+{
+    "appService.defaultWebAppToDeploy": "/subscriptions/1912c358-8bec-44df-b0e1-91f680505c25/resourceGroups/d-devasplan-magnesyljuaasen-rg/providers/Microsoft.Web/sites/streamlit-kringsjaa",
+    "appService.deploySubpath": "."
+}
