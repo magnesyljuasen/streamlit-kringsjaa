@@ -27,7 +27,7 @@ def streamlit_settings(title, icon):
     )
 
 def download_pdf():
-    pdf_file_path = "Rapport.pdf"
+    pdf_file_path = "Rapport_v2.pdf"
 
     with open(pdf_file_path, "rb") as file:
         pdf_bytes = file.read()
