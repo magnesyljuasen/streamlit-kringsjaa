@@ -174,6 +174,7 @@ def create_map(df_position):
             show=show,
         ).add_to(folium_map)
     
+    # oppdatert
     center_y = df_position["x"].mean()
     center_x = df_position["y"].mean()
     folium_map = folium.Map(
