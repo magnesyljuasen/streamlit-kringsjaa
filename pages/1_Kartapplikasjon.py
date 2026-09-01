@@ -185,7 +185,14 @@ def create_map(df_position):
         control_scale=True,
         prefer_canvas=True
         )           
-    folium.TileLayer("CartoDB positron", name="Bakgrunnskart").add_to(folium_map)
+    folium.TileLayer(
+        tiles="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        attr="© OpenStreetMap contributors",
+        name="Bakgrunnskart",
+        max_zoom=19,
+        opacity=0.3
+    ).add_to(folium_map)
+
     folium.TileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", name="Flyfoto", attr="Flyfoto").add_to(folium_map)
     geometry = [Point(xy) for xy in zip(df_position['x'], df_position['y'])]
     gdf_buildings = gpd.GeoDataFrame(df_position, geometry=geometry, crs='EPSG:4326')
